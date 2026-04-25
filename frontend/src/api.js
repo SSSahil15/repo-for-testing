@@ -1,73 +1,51 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const TOKEN_KEY = "devpulse_token";
 
-class ApiError extends Error {
-  constructor(message, status, payload) {
+export class ApiError extends Error {
+  constructor(message, status) {
     super(message);
-    this.name = "ApiError";
     this.status = status;
-    this.payload = payload;
   }
 }
 
-async function apiRequest(path, options = {}) {
-  const { accessToken, headers, ...requestOptions } = options;
-
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(headers || {})
-    },
-    ...requestOptions
-  });
-
-  const contentType = response.headers.get("content-type") || "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : null;
-
-  if (!response.ok) {
-    throw new ApiError(
-      payload?.message || `Request failed with status ${response.status}.`,
-      response.status,
-      payload
-    );
-  }
-
-  return payload;
+export function getStoredToken() {
+  return localStorage.getItem(TOKEN_KEY);
 }
 
-async function syncGitHubProviderToken(session) {
-  if (!session?.access_token || !session?.provider_token) {
-    return {
-      skipped: true
-    };
-  }
-
-  return apiRequest("/auth/provider-token", {
-    accessToken: session.access_token,
-    body: JSON.stringify({
-      providerToken: session.provider_token
-    }),
-    method: "POST"
-  });
+export function storeToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
-async function removeGitHubProviderToken(accessToken) {
-  if (!accessToken) {
-    return;
-  }
-
-  return apiRequest("/auth/provider-token", {
-    accessToken,
-    method: "DELETE"
-  });
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
 }
 
-export {
-  API_URL,
-  ApiError,
-  apiRequest,
-  removeGitHubProviderToken,
-  syncGitHubProviderToken
-};
+export function decodeJWTPayload(token) {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(base64));
+  } catch {
+    return null;
+  }
+}
+
+export function isTokenExpired(token) {
+  const payload = decodeJWTPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() / 1000 > payload.exp;
+}
+
+export async function apiRequest(path, { accessToken, method = "GET", body } = {}) {
+  const token = accessToken || getStoredToken();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { method, headers, body });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ message: res.statusText }));
+    throw new ApiError(data.message || "Request failed", res.status);
+  }
+
+  return res.json();
+}

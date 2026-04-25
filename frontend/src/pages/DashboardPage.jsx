@@ -1,272 +1,173 @@
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
-
+import { Search, LogOut, ShieldCheck, Zap, Loader2, AlertCircle } from "lucide-react";
 import { ApiError, apiRequest } from "../api";
 import AnalysisPanel from "../components/AnalysisPanel";
 import RepositoryCard from "../components/RepositoryCard";
 
-function getUserInitials(user) {
-  if (!user?.displayName && !user?.username) {
-    return "DP";
-  }
-
-  return (user.displayName || user.username)
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+function getInitials(user) {
+  if (!user?.displayName && !user?.username) return "DP";
+  return (user.displayName || user.username).split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function DashboardPage({
-  accessToken,
-  githubTokenSynced,
-  onLogout,
-  onSessionExpired,
-  user
-}) {
+function DashboardPage({ accessToken, onLogout, onSessionExpired, user }) {
   const [repositories, setRepositories] = useState([]);
-  const [repoState, setRepoState] = useState({
-    error: "",
-    status: "loading"
-  });
-  const [analysisState, setAnalysisState] = useState({
-    error: "",
-    status: "idle",
-    targetRepositoryId: null
-  });
+  const [repoState, setRepoState] = useState({ error: "", status: "loading" });
+  const [analysisState, setAnalysisState] = useState({ error: "", status: "idle", targetRepositoryId: null });
   const [analysisResult, setAnalysisResult] = useState(null);
   const [selectedRepositoryId, setSelectedRepositoryId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-
-  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredSearch = useDeferredValue(searchTerm);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadRepositories() {
-      setRepoState({
-        error: "",
-        status: "loading"
-      });
-
+    let live = true;
+    async function load() {
+      setRepoState({ error: "", status: "loading" });
       try {
-        const data = await apiRequest("/repos", {
-          accessToken
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
+        const data = await apiRequest("/repos", { accessToken });
+        if (!live) return;
         setRepositories(data.repositories);
-        setRepoState({
-          error: "",
-          status: "success"
-        });
-
-        if (data.repositories.length > 0) {
-          setSelectedRepositoryId((currentValue) => currentValue || data.repositories[0].id);
-        }
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        if (error instanceof ApiError && error.status === 401) {
-          onSessionExpired("Your GitHub session expired. Please sign in again.");
-          return;
-        }
-
-        setRepoState({
-          error: error.message,
-          status: "error"
-        });
+        setRepoState({ error: "", status: "success" });
+        if (data.repositories.length > 0) setSelectedRepositoryId(c => c || data.repositories[0].id);
+      } catch (err) {
+        if (!live) return;
+        if (err instanceof ApiError && err.status === 401) { onSessionExpired("Session expired."); return; }
+        setRepoState({ error: err.message, status: "error" });
       }
     }
+    load();
+    return () => { live = false; };
+  }, [accessToken, onSessionExpired, user.id]);
 
-    if (githubTokenSynced === null) {
-      setRepoState({
-        error: "",
-        status: "loading"
-      });
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    if (!githubTokenSynced) {
-      setRepoState({
-        error:
-          "GitHub login succeeded, but the backend is still waiting for the GitHub provider token. Finish the sign-in flow again if this message persists.",
-        status: "error"
-      });
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    loadRepositories();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [accessToken, githubTokenSynced, onSessionExpired, user.id]);
-
-  const filteredRepositories = repositories.filter((repository) => {
-    const haystack = `${repository.name} ${repository.fullName} ${
-      repository.language || ""
-    } ${repository.description || ""}`.toLowerCase();
-
-    return haystack.includes(deferredSearchTerm.trim().toLowerCase());
+  const filtered = repositories.filter(r => {
+    const hay = `${r.name} ${r.fullName} ${r.language || ""} ${r.description || ""}`.toLowerCase();
+    return hay.includes(deferredSearch.trim().toLowerCase());
   });
 
-  const selectedRepository =
-    repositories.find((repository) => repository.id === selectedRepositoryId) || null;
+  const selectedRepo = repositories.find(r => r.id === selectedRepositoryId) || null;
 
-  async function handleAnalyze(repository) {
-    setAnalysisState({
-      error: "",
-      status: "loading",
-      targetRepositoryId: repository.id
-    });
-    setSelectedRepositoryId(repository.id);
-
+  async function handleAnalyze(repo) {
+    setAnalysisState({ error: "", status: "loading", targetRepositoryId: repo.id });
+    setSelectedRepositoryId(repo.id);
     try {
-      const data = await apiRequest("/analyze", {
-        accessToken,
-        body: JSON.stringify({
-          repositoryFullName: repository.fullName
-        }),
-        method: "POST"
-      });
-
+      const data = await apiRequest("/analyze", { accessToken, body: JSON.stringify({ repositoryFullName: repo.fullName }), method: "POST" });
       setAnalysisResult(data);
-      setAnalysisState({
-        error: "",
-        status: "success",
-        targetRepositoryId: repository.id
-      });
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        onSessionExpired("Your GitHub session expired. Please sign in again.");
-        return;
-      }
-
-      setAnalysisState({
-        error: error.message,
-        status: "error",
-        targetRepositoryId: repository.id
-      });
+      setAnalysisState({ error: "", status: "success", targetRepositoryId: repo.id });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) { onSessionExpired("Session expired."); return; }
+      setAnalysisState({ error: err.message, status: "error", targetRepositoryId: repo.id });
     }
   }
 
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="section-label">DevPulse dashboard</p>
-          <h1>Welcome back, {user.displayName}</h1>
-        </div>
+    <div className="flex h-screen bg-[#080b14] overflow-hidden">
+      {/* Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-60 -right-60 w-[700px] h-[700px] bg-blue-600/5 rounded-full blur-[140px]" />
+        <div className="absolute -bottom-60 -left-40 w-[500px] h-[500px] bg-indigo-700/5 rounded-full blur-[120px]" />
+      </div>
 
-        <div className="header-actions">
-          <div className="user-chip">
-            {user.avatarUrl ? (
-              <img alt={user.username} src={user.avatarUrl} />
-            ) : (
-              <div className="user-avatar-fallback">{getUserInitials(user)}</div>
-            )}
-            <div>
-              <strong>{user.username}</strong>
-              <span>GitHub connected</span>
-            </div>
+      {/* Sidebar */}
+      <aside className="relative z-10 w-[280px] shrink-0 flex flex-col border-r border-white/[0.06] bg-black/20 backdrop-blur-sm">
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/[0.06]">
+          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30">
+            <Zap className="w-5 h-5 text-white fill-white" />
           </div>
-
-          <button className="ghost-button" onClick={onLogout} type="button">
-            Logout
-          </button>
+          <span className="text-base font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">DevPulse</span>
         </div>
-      </header>
 
-      <section className="workspace-grid">
-        <aside className="repo-shell">
-          <div className="repo-toolbar">
-            <div>
-              <p className="section-label">Repositories</p>
-              <h2>{repositories.length} connected repositories</h2>
-              {githubTokenSynced === null ? (
-                <p className="panel-description">
-                  Checking whether the backend already has your GitHub provider
-                  token from Supabase.
-                </p>
-              ) : null}
-              {githubTokenSynced === false ? (
-                <p className="panel-description">
-                  Waiting for the backend to receive the GitHub provider token
-                  from Supabase.
-                </p>
-              ) : null}
-            </div>
-
+        {/* Search */}
+        <div className="px-4 py-3 border-b border-white/[0.06]">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
             <input
-              className="repo-search"
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                startTransition(() => {
-                  setSearchTerm(nextValue);
-                });
-              }}
-              placeholder="Search repositories"
-              type="search"
+              className="w-full bg-white/[0.04] ring-1 ring-white/[0.08] focus:ring-blue-500/40 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-300 placeholder:text-slate-600 outline-none transition-all"
+              onChange={e => startTransition(() => setSearchTerm(e.target.value))}
+              placeholder="Search repos..."
               value={searchTerm}
             />
           </div>
+        </div>
 
-          {repoState.status === "loading" ? (
-            <div className="empty-panel">
-              <h3>Loading repositories</h3>
-              <p>Fetching your GitHub repositories and preparing the dashboard.</p>
+        {/* Repo count */}
+        <div className="px-5 py-3 flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">Repositories</span>
+          <span className="text-[10px] font-bold text-slate-600 bg-white/5 px-2 py-0.5 rounded-full">
+            {repositories.length}
+          </span>
+        </div>
+
+        {/* Repo list */}
+        <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
+          {repoState.status === "loading" && (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-600">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="text-xs">Loading repos...</span>
             </div>
-          ) : null}
-
-          {repoState.status === "error" ? (
-            <div className="feedback-card feedback-error">{repoState.error}</div>
-          ) : null}
-
-          {repoState.status === "success" && filteredRepositories.length === 0 ? (
-            <div className="empty-panel">
-              <h3>No matching repositories</h3>
-              <p>Try a different search term or refresh after adding GitHub access.</p>
+          )}
+          {repoState.status === "error" && (
+            <div className="mx-2 flex items-start gap-2 bg-red-500/10 ring-1 ring-red-500/20 rounded-xl p-3">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-red-300">{repoState.error}</span>
             </div>
-          ) : null}
+          )}
+          {filtered.map(repo => (
+            <RepositoryCard
+              key={repo.id}
+              isAnalyzing={analysisState.status === "loading" && analysisState.targetRepositoryId === repo.id}
+              isSelected={selectedRepositoryId === repo.id}
+              onAnalyze={handleAnalyze}
+              onSelect={r => setSelectedRepositoryId(r.id)}
+              repository={repo}
+            />
+          ))}
+        </div>
 
-          <div className="repo-list">
-            {filteredRepositories.map((repository) => (
-              <RepositoryCard
-                isAnalyzing={
-                  analysisState.status === "loading" &&
-                  analysisState.targetRepositoryId === repository.id
-                }
-                isSelected={selectedRepositoryId === repository.id}
-                key={repository.id}
-                onAnalyze={handleAnalyze}
-                onSelect={(nextRepository) => {
-                  setSelectedRepositoryId(nextRepository.id);
-                }}
-                repository={repository}
-              />
-            ))}
+        {/* User footer */}
+        <div className="border-t border-white/[0.06] bg-white/[0.01] p-4">
+          <div className="flex items-center gap-3">
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" className="w-9 h-9 rounded-full ring-2 ring-white/10 shrink-0" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-blue-900 ring-2 ring-white/10 flex items-center justify-center text-xs font-bold shrink-0">
+                {getInitials(user)}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate text-white">{user.username}</p>
+              <div className="flex items-center gap-1 text-[10px] text-emerald-500 font-semibold">
+                <ShieldCheck className="w-3 h-3" /> Connected
+              </div>
+            </div>
+            <button
+              onClick={onLogout}
+              className="p-2 hover:bg-red-500/10 text-slate-600 hover:text-red-400 rounded-lg transition-colors"
+              title="Log out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-        </aside>
+        </div>
+      </aside>
 
-        <AnalysisPanel
-          accessToken={accessToken}
-          analysisResult={analysisResult}
-          analysisState={analysisState}
-          onAnalyze={handleAnalyze}
-          repository={selectedRepository}
-        />
-      </section>
-    </main>
+      {/* Main */}
+      <main className="flex-1 overflow-y-auto relative z-10">
+        <div className="max-w-5xl mx-auto p-8">
+          {/* Dashboard header */}
+          <div className="mb-8">
+            <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold mb-1">DevPulse Dashboard</p>
+            <h1 className="text-2xl font-black text-white">Welcome back, {user.displayName || user.username} 👋</h1>
+          </div>
+          <AnalysisPanel
+            accessToken={accessToken}
+            analysisResult={analysisResult}
+            analysisState={analysisState}
+            onAnalyze={handleAnalyze}
+            repository={selectedRepo}
+          />
+        </div>
+      </main>
+    </div>
   );
 }
 

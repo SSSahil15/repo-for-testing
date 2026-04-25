@@ -1,24 +1,36 @@
 const asyncHandler = require("../utils/asyncHandler");
-const {
-  authenticateAccessToken,
-  extractBearerToken,
-  sanitizeSupabaseUser
-} = require("../services/supabaseAuth.service");
+const { verifyDevPulseJWT } = require("../services/githubAuth.service");
+
+function extractBearerToken(authorizationHeader) {
+  if (!authorizationHeader) return null;
+  const [scheme, token] = authorizationHeader.split(" ");
+  if (scheme !== "Bearer" || !token) return null;
+  return token;
+}
 
 const ensureAuthenticated = asyncHandler(async (req, res, next) => {
-  const accessToken = extractBearerToken(req.headers.authorization);
+  const token = extractBearerToken(req.headers.authorization);
 
-  if (!accessToken) {
+  if (!token) {
     return res.status(401).json({
-      message: "Authentication required. Sign in with GitHub through Supabase first."
+      message: "Authentication required. Sign in with GitHub first.",
     });
   }
 
-  const user = await authenticateAccessToken(accessToken);
+  const payload = verifyDevPulseJWT(token);
 
-  req.accessToken = accessToken;
-  req.supabaseUser = user;
-  req.user = sanitizeSupabaseUser(user);
+  // Attach standardised user to every authenticated request
+  req.user = {
+    id: payload.sub,
+    username: payload.username,
+    displayName: payload.displayName,
+    avatarUrl: payload.avatarUrl,
+    profileUrl: payload.profileUrl,
+    email: payload.email,
+  };
+
+  // Keep supabaseUser alias for backwards compatibility with existing routes
+  req.supabaseUser = { id: payload.sub };
 
   return next();
 });

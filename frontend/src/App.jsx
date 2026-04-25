@@ -1,220 +1,89 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-
-import {
-  apiRequest,
-  removeGitHubProviderToken,
-  syncGitHubProviderToken
-} from "./api";
+import { Loader2, Zap } from "lucide-react";
+import { getStoredToken, clearToken, isTokenExpired, decodeJWTPayload, apiRequest } from "./api";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
-import { mapSupabaseUser, supabase } from "./supabase";
 
 function LoadingScreen() {
   return (
-    <div className="screen-center">
-      <div className="loading-stack">
-        <div className="pulse-orb" />
-        <p>Loading your DevPulse workspace...</p>
+    <div className="min-h-screen bg-[#080b14] flex flex-col items-center justify-center gap-6">
+      <div className="animate-pulse-glow w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center">
+        <Zap className="w-8 h-8 text-blue-400 fill-blue-400" />
+      </div>
+      <div className="flex items-center gap-2 text-slate-400 text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Loading your DevPulse workspace...
       </div>
     </div>
   );
 }
 
 function App() {
-  const [session, setSession] = useState({
-    error: "",
-    accessToken: "",
-    githubTokenSynced: null,
-    rawSession: null,
-    status: "loading",
-    user: null
-  });
+  const [session, setSession] = useState({ status: "loading", user: null, accessToken: "", error: "" });
 
   useEffect(() => {
-    let isMounted = true;
+    async function bootstrap() {
+      const token = getStoredToken();
 
-    async function applySession(nextSession) {
-      if (!isMounted) {
+      if (!token || isTokenExpired(token)) {
+        clearToken();
+        setSession({ status: "anonymous", user: null, accessToken: "", error: "" });
         return;
       }
 
-      if (!nextSession) {
-        setSession({
-          accessToken: "",
-          error: "",
-          githubTokenSynced: null,
-          rawSession: null,
-          status: "anonymous",
-          user: null
-        });
-        return;
-      }
+      // Decode user directly from JWT — no network round-trip needed for UI
+      const payload = decodeJWTPayload(token);
+      const user = {
+        id: payload.sub,
+        username: payload.username,
+        displayName: payload.displayName,
+        avatarUrl: payload.avatarUrl,
+        profileUrl: payload.profileUrl,
+        email: payload.email,
+      };
 
-      setSession({
-        accessToken: nextSession.access_token,
-        error: "",
-        githubTokenSynced: null,
-        rawSession: nextSession,
-        status: "authenticated",
-        user: mapSupabaseUser(nextSession.user)
-      });
-
-      try {
-        const authState = await apiRequest("/auth/me", {
-          accessToken: nextSession.access_token
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSession((currentValue) => ({
-          ...currentValue,
-          githubTokenSynced: Boolean(authState.githubTokenSynced)
-        }));
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setSession((currentValue) => ({
-          ...currentValue,
-          error: error.message
-        }));
-      }
-
-      if (nextSession.provider_token) {
-        try {
-          await syncGitHubProviderToken(nextSession);
-          if (!isMounted) {
-            return;
-          }
-
-          setSession((currentValue) => ({
-            ...currentValue,
-            githubTokenSynced: true
-          }));
-        } catch (error) {
-          if (!isMounted) {
-            return;
-          }
-
-          setSession((currentValue) => ({
-            ...currentValue,
-            error: error.message
-          }));
-        }
-      }
+      setSession({ status: "authenticated", user, accessToken: token, error: "" });
     }
 
-    async function loadSession() {
-      try {
-        const {
-          data: { session: currentSession }
-        } = await supabase.auth.getSession();
-
-        await applySession(currentSession);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setSession({
-          accessToken: "",
-          error: "",
-          githubTokenSynced: null,
-          rawSession: null,
-          status: "anonymous",
-          user: null
-        });
-      }
-    }
-
-    loadSession();
-
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      void applySession(nextSession);
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
+    bootstrap();
   }, []);
 
-  async function handleLogout() {
-    try {
-      await removeGitHubProviderToken(session.accessToken);
-    } catch (error) {
-      // If the backend token is already gone, we still want to sign the user out.
-    }
-
-    await supabase.auth.signOut();
+  function handleLogout() {
+    clearToken();
+    setSession({ status: "anonymous", user: null, accessToken: "", error: "" });
   }
 
-  async function handleSessionExpired(message) {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      // If sign out fails, we still force the UI back to login.
-    }
-
-    setSession({
-      accessToken: "",
-      error: message || "Your session expired. Please sign in again.",
-      githubTokenSynced: null,
-      rawSession: null,
-      status: "anonymous",
-      user: null
-    });
+  function handleSessionExpired(message) {
+    clearToken();
+    setSession({ status: "anonymous", user: null, accessToken: "", error: message || "Your session expired. Please sign in again." });
   }
 
-  if (session.status === "loading") {
-    return <LoadingScreen />;
-  }
+  if (session.status === "loading") return <LoadingScreen />;
 
   return (
     <Routes>
       <Route
         path="/login"
-        element={
-          session.status === "authenticated" ? (
-            <Navigate replace to="/dashboard" />
-          ) : (
-            <LoginPage sessionError={session.error} />
-          )
-        }
+        element={session.status === "authenticated"
+          ? <Navigate replace to="/dashboard" />
+          : <LoginPage sessionError={session.error} />}
       />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route
         path="/dashboard"
-        element={
-          session.status !== "authenticated" ? (
-            <Navigate replace to="/login" />
-          ) : (
-            <DashboardPage
+        element={session.status !== "authenticated"
+          ? <Navigate replace to="/login" />
+          : <DashboardPage
               accessToken={session.accessToken}
-              githubTokenSynced={session.githubTokenSynced}
+              githubTokenSynced={true}
               onLogout={handleLogout}
               onSessionExpired={handleSessionExpired}
               user={session.user}
-            />
-          )
-        }
+            />}
       />
-      <Route
-        path="*"
-        element={
-          <Navigate
-            replace
-            to={session.status === "authenticated" ? "/dashboard" : "/login"}
-          />
-        }
-      />
+      <Route path="*" element={<Navigate replace to={session.status === "authenticated" ? "/dashboard" : "/login"} />} />
     </Routes>
   );
 }

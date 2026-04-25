@@ -20,7 +20,10 @@ const envSchema = z.object({
     .min(1)
     .default("./.data/github-provider-tokens.json"),
   GITHUB_REPO_PAGE_LIMIT: z.coerce.number().int().positive().max(50).default(10),
-  AI_SERVICE_URL: z.string().url().default("http://localhost:8000")
+  AI_SERVICE_URL: z.string().url().default("http://localhost:8000"),
+  GITHUB_CLIENT_ID: z.string().min(1, "GITHUB_CLIENT_ID is required."),
+  GITHUB_CLIENT_SECRET: z.string().min(1, "GITHUB_CLIENT_SECRET is required."),
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -37,9 +40,12 @@ module.exports = {
   backendUrl: env.BACKEND_URL,
   aiServiceUrl: env.AI_SERVICE_URL,
   frontendUrl: env.FRONTEND_URL,
+  githubClientId: env.GITHUB_CLIENT_ID,
+  githubClientSecret: env.GITHUB_CLIENT_SECRET,
   githubRepoPageLimit: env.GITHUB_REPO_PAGE_LIMIT,
   githubTokenStoreFilePath: env.GITHUB_TOKEN_STORE_FILE_PATH,
   isProduction: env.NODE_ENV === "production",
+  jwtSecret: env.JWT_SECRET,
   nodeEnv: env.NODE_ENV,
   port: env.PORT,
   supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY,

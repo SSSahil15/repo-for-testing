@@ -8,12 +8,14 @@ const analyzeRoutes = require("./routes/analyze.routes");
 const authRoutes = require("./routes/auth.routes");
 const repoRoutes = require("./routes/repo.routes");
 const webhookRoutes = require("./routes/webhook.routes");
+const pipelineRoutes = require("./routes/pipeline.routes");
 
 const app = express();
 
 app.use(
   cors({
     origin(origin, callback) {
+      // Allow requests with no origin (curl, CI pipelines, server-to-server)
       if (!origin || origin === config.frontendUrl) {
         return callback(null, true);
       }
@@ -44,6 +46,7 @@ app.use("/auth", authRoutes);
 app.use("/repos", repoRoutes);
 app.use("/analyze", analyzeRoutes);
 app.use("/webhooks", webhookRoutes);
+app.use("/api/pipeline", pipelineRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

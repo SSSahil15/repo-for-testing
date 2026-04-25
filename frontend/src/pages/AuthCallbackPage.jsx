@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-
-import { syncGitHubProviderToken } from "../api";
-import { supabase } from "../supabase";
+import { Loader2, AlertCircle, Zap } from "lucide-react";
+import { storeToken, decodeJWTPayload } from "../api";
 
 function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -10,70 +9,44 @@ function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    let isMounted = true;
+    const token = searchParams.get("token");
+    const error = searchParams.get("error");
 
-    async function handleCallback() {
-      const providerError =
-        searchParams.get("error_description") || searchParams.get("error");
-
-      if (providerError) {
-        navigate("/login?error=supabase_auth_failed", { replace: true });
-        return;
-      }
-
-      const authCode = searchParams.get("code");
-
-      if (!authCode) {
-        navigate("/login?error=missing_auth_code", { replace: true });
-        return;
-      }
-
-      const { data, error } = await supabase.auth.exchangeCodeForSession(authCode);
-
-      if (error || !data.session) {
-        if (!isMounted) {
-          return;
-        }
-
-        setErrorMessage(
-          error?.message || "Supabase could not finish the GitHub sign-in flow."
-        );
-        return;
-      }
-
-      try {
-        await syncGitHubProviderToken(data.session);
-        navigate("/dashboard", { replace: true });
-      } catch (syncError) {
-        if (!isMounted) {
-          return;
-        }
-
-        setErrorMessage(
-          syncError.message ||
-            "GitHub login succeeded, but DevPulse could not sync your GitHub token to the backend."
-        );
-      }
+    if (error || !token) {
+      navigate("/login?error=auth_failed", { replace: true });
+      return;
     }
 
-    handleCallback();
+    // Decode and validate the JWT
+    const payload = decodeJWTPayload(token);
+    if (!payload || !payload.sub) {
+      navigate("/login?error=auth_failed", { replace: true });
+      return;
+    }
 
-    return () => {
-      isMounted = false;
-    };
+    // Store the JWT and redirect to the dashboard
+    storeToken(token);
+    navigate("/dashboard", { replace: true });
   }, [navigate, searchParams]);
 
   return (
-    <div className="screen-center">
-      <div className="loading-stack">
-        <div className="pulse-orb" />
-        <p>
-          {errorMessage || "Finishing your GitHub sign-in and preparing DevPulse..."}
-        </p>
+    <div className="min-h-screen bg-[#080b14] flex flex-col items-center justify-center gap-6">
+      <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center animate-pulse-glow">
+        <Zap className="w-8 h-8 text-blue-400 fill-blue-400" />
       </div>
+      {errorMessage ? (
+        <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-2xl px-6 py-4 max-w-md">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <p className="text-sm text-red-300">{errorMessage}</p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-slate-400 text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Signing you in with GitHub...
+        </div>
+      )}
     </div>
   );
 }
 
 export default AuthCallbackPage;
-

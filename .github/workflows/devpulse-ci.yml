@@ -1,0 +1,425 @@
+# ============================================================
+# DevPulse CI/CD Pipeline
+# ============================================================
+# Triggers on every push and pull_request.
+# Stages: Lint → Build → Test → Security Scan → Docker → Deploy Gate
+# Results are posted back to the DevPulse API and saved as artifacts.
+# ============================================================
+
+name: DevPulse CI/CD
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+env:
+  NODE_VERSION: "20"
+  DOCKER_IMAGE: devpulse-backend
+
+# ────────────────────────────────────────────────────────────
+jobs:
+  # ─── Stage 1: Backend ────────────────────────────────────
+  backend:
+    name: "Backend · Build & Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: "📥 Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Node.js ${{ env.NODE_VERSION }}"
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: "📦 Install dependencies"
+        run: npm ci --ignore-scripts 2>&1 | tee ../logs/backend-install.log
+        shell: bash
+        env:
+          LOG_DIR: ${{ github.workspace }}/logs
+      
+      # Ensure log directory exists before anything writes to it
+      - name: "📁 Prepare log directory"
+        run: mkdir -p ${{ github.workspace }}/logs
+
+      - name: "🔍 Syntax check"
+        run: node --check src/server.js 2>&1 | tee ${{ github.workspace }}/logs/backend-syntax.log
+
+      - name: "🧪 Run tests"
+        id: backend_tests
+        run: |
+          set +e
+          npm test 2>&1 | tee ${{ github.workspace }}/logs/backend-tests.log
+          TEST_EXIT=$?
+          echo "exit_code=$TEST_EXIT" >> $GITHUB_OUTPUT
+          if [ $TEST_EXIT -ne 0 ]; then
+            echo "result=failure" >> $GITHUB_OUTPUT
+          else
+            echo "result=success" >> $GITHUB_OUTPUT
+          fi
+          exit 0
+        continue-on-error: true
+
+      - name: "📤 Upload backend logs"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-logs
+          path: logs/
+          retention-days: 14
+
+    outputs:
+      test_result: ${{ steps.backend_tests.outputs.result }}
+
+  # ─── Stage 2: Frontend ──────────────────────────────────
+  frontend:
+    name: "Frontend · Build & Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: "📥 Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Node.js ${{ env.NODE_VERSION }}"
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: "📁 Prepare log directory"
+        run: mkdir -p ${{ github.workspace }}/logs
+
+      - name: "📦 Install dependencies"
+        run: npm ci --ignore-scripts 2>&1 | tee ${{ github.workspace }}/logs/frontend-install.log
+
+      - name: "🏗️ Build production bundle"
+        id: frontend_build
+        run: |
+          set +e
+          npm run build 2>&1 | tee ${{ github.workspace }}/logs/frontend-build.log
+          BUILD_EXIT=$?
+          echo "exit_code=$BUILD_EXIT" >> $GITHUB_OUTPUT
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "result=failure" >> $GITHUB_OUTPUT
+          else
+            echo "result=success" >> $GITHUB_OUTPUT
+          fi
+          exit 0
+        continue-on-error: true
+
+      - name: "🧪 Run tests"
+        id: frontend_tests
+        run: |
+          set +e
+          npm test 2>&1 | tee ${{ github.workspace }}/logs/frontend-tests.log
+          TEST_EXIT=$?
+          echo "exit_code=$TEST_EXIT" >> $GITHUB_OUTPUT
+          if [ $TEST_EXIT -ne 0 ]; then
+            echo "result=failure" >> $GITHUB_OUTPUT
+          else
+            echo "result=success" >> $GITHUB_OUTPUT
+          fi
+          exit 0
+        continue-on-error: true
+
+      - name: "📤 Upload frontend logs"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-logs
+          path: logs/
+          retention-days: 14
+
+    outputs:
+      build_result: ${{ steps.frontend_build.outputs.result }}
+      test_result: ${{ steps.frontend_tests.outputs.result }}
+
+  # ─── Stage 3: Security Scan (Trivy) ────────────────────
+  security:
+    name: "Security · Trivy Filesystem Scan"
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - name: "📥 Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "📁 Prepare output directory"
+        run: mkdir -p ${{ github.workspace }}/security-reports
+
+      - name: "🛡️ Run Trivy filesystem scan"
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: security-reports/trivy-fs-results.json
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: "📊 Generate human-readable report"
+        if: always()
+        run: |
+          echo "═══════════════════════════════════════" > security-reports/trivy-summary.txt
+          echo "  DevPulse Security Scan Report"        >> security-reports/trivy-summary.txt
+          echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"  >> security-reports/trivy-summary.txt
+          echo "═══════════════════════════════════════" >> security-reports/trivy-summary.txt
+          echo "" >> security-reports/trivy-summary.txt
+
+          if [ -f security-reports/trivy-fs-results.json ]; then
+            CRITICAL=$(cat security-reports/trivy-fs-results.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          results = data.get('Results', [])
+          count = sum(1 for r in results for v in r.get('Vulnerabilities', []) if v.get('Severity') == 'CRITICAL')
+          print(count)" 2>/dev/null || echo "0")
+
+            HIGH=$(cat security-reports/trivy-fs-results.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          results = data.get('Results', [])
+          count = sum(1 for r in results for v in r.get('Vulnerabilities', []) if v.get('Severity') == 'HIGH')
+          print(count)" 2>/dev/null || echo "0")
+
+            MEDIUM=$(cat security-reports/trivy-fs-results.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          results = data.get('Results', [])
+          count = sum(1 for r in results for v in r.get('Vulnerabilities', []) if v.get('Severity') == 'MEDIUM')
+          print(count)" 2>/dev/null || echo "0")
+
+            echo "  CRITICAL : $CRITICAL"  >> security-reports/trivy-summary.txt
+            echo "  HIGH     : $HIGH"      >> security-reports/trivy-summary.txt
+            echo "  MEDIUM   : $MEDIUM"    >> security-reports/trivy-summary.txt
+            echo "" >> security-reports/trivy-summary.txt
+
+            echo "vuln_critical=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "vuln_high=$HIGH"         >> $GITHUB_OUTPUT
+            echo "vuln_medium=$MEDIUM"     >> $GITHUB_OUTPUT
+          else
+            echo "  ⚠ No scan results found." >> security-reports/trivy-summary.txt
+            echo "vuln_critical=0" >> $GITHUB_OUTPUT
+            echo "vuln_high=0"     >> $GITHUB_OUTPUT
+            echo "vuln_medium=0"   >> $GITHUB_OUTPUT
+          fi
+
+          cat security-reports/trivy-summary.txt
+        id: vuln_count
+
+      - name: "📤 Upload security reports"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: security-reports/
+          retention-days: 30
+
+    outputs:
+      vuln_critical: ${{ steps.vuln_count.outputs.vuln_critical }}
+      vuln_high: ${{ steps.vuln_count.outputs.vuln_high }}
+      vuln_medium: ${{ steps.vuln_count.outputs.vuln_medium }}
+
+  # ─── Stage 4: Docker Build & Scan ──────────────────────
+  docker:
+    name: "Docker · Build & Scan Image"
+    runs-on: ubuntu-latest
+    needs: [backend]
+
+    steps:
+      - name: "📥 Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "📁 Prepare output directory"
+        run: mkdir -p ${{ github.workspace }}/docker-reports
+
+      - name: "🐳 Build Docker image"
+        id: docker_build
+        run: |
+          set +e
+          docker build -f backend/Dockerfile -t ${{ env.DOCKER_IMAGE }}:${{ github.sha }} ./backend 2>&1 | tee docker-reports/docker-build.log
+          BUILD_EXIT=$?
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "result=failure" >> $GITHUB_OUTPUT
+          else
+            echo "result=success" >> $GITHUB_OUTPUT
+          fi
+          exit $BUILD_EXIT
+
+      - name: "🛡️ Scan Docker image with Trivy"
+        if: steps.docker_build.outputs.result == 'success'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          format: json
+          output: docker-reports/trivy-image-results.json
+          severity: CRITICAL,HIGH
+
+      - name: "📊 Docker scan summary"
+        if: always()
+        run: |
+          echo "Docker Build: ${{ steps.docker_build.outputs.result }}" > docker-reports/docker-summary.txt
+          if [ -f docker-reports/trivy-image-results.json ]; then
+            IMG_VULNS=$(cat docker-reports/trivy-image-results.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          results = data.get('Results', [])
+          count = sum(len(r.get('Vulnerabilities', [])) for r in results)
+          print(count)" 2>/dev/null || echo "0")
+            echo "Image Vulnerabilities: $IMG_VULNS" >> docker-reports/docker-summary.txt
+            echo "docker_vulns=$IMG_VULNS" >> $GITHUB_OUTPUT
+          fi
+          cat docker-reports/docker-summary.txt
+        id: docker_summary
+
+      - name: "📤 Upload Docker reports"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-reports
+          path: docker-reports/
+          retention-days: 14
+
+    outputs:
+      build_result: ${{ steps.docker_build.outputs.result }}
+      docker_vulns: ${{ steps.docker_summary.outputs.docker_vulns }}
+
+  # ─── Stage 5: Report to DevPulse API ──────────────────
+  report:
+    name: "Report · Send Results to DevPulse"
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, security, docker]
+    if: always()
+
+    steps:
+      - name: "📡 Post pipeline results to DevPulse API"
+        run: |
+          PAYLOAD=$(cat <<EOF
+          {
+            "repository": "${{ github.repository }}",
+            "commitSha": "${{ github.sha }}",
+            "commitMessage": $(echo '${{ github.event.head_commit.message }}' | head -c 200 | python3 -c "import json,sys; print(json.dumps(sys.stdin.read().strip()))"),
+            "branch": "${{ github.ref_name }}",
+            "triggeredBy": "${{ github.actor }}",
+            "runId": "${{ github.run_id }}",
+            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "event": "${{ github.event_name }}",
+            "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "stages": {
+              "backend": {
+                "tests": "${{ needs.backend.outputs.test_result || 'skipped' }}"
+              },
+              "frontend": {
+                "build": "${{ needs.frontend.outputs.build_result || 'skipped' }}",
+                "tests": "${{ needs.frontend.outputs.test_result || 'skipped' }}"
+              },
+              "security": {
+                "critical": ${{ needs.security.outputs.vuln_critical || 0 }},
+                "high": ${{ needs.security.outputs.vuln_high || 0 }},
+                "medium": ${{ needs.security.outputs.vuln_medium || 0 }}
+              },
+              "docker": {
+                "build": "${{ needs.docker.outputs.build_result || 'skipped' }}",
+                "imageVulnerabilities": ${{ needs.docker.outputs.docker_vulns || 0 }}
+              }
+            },
+            "overallStatus": "${{ (needs.backend.result == 'success' && needs.frontend.result == 'success' && needs.security.result == 'success' && needs.docker.result == 'success') && 'success' || 'failure' }}"
+          }
+          EOF
+          )
+
+          echo "══════════════════════════════════════════════"
+          echo "  DevPulse Pipeline Report"
+          echo "══════════════════════════════════════════════"
+          echo "$PAYLOAD" | python3 -m json.tool 2>/dev/null || echo "$PAYLOAD"
+          echo "══════════════════════════════════════════════"
+
+          if [ -n "${{ secrets.DEVPULSE_API_URL }}" ]; then
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST "${{ secrets.DEVPULSE_API_URL }}/api/pipeline/results" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${{ secrets.DEVPULSE_API_TOKEN }}" \
+              -d "$PAYLOAD")
+
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+              echo "✅ Results sent to DevPulse API (HTTP $HTTP_STATUS)"
+            else
+              echo "⚠️  DevPulse API responded with HTTP $HTTP_STATUS"
+            fi
+          else
+            echo "ℹ️  DEVPULSE_API_URL secret not set — skipping API report."
+            echo "   Set it in: Repo → Settings → Secrets → Actions"
+          fi
+
+  # ─── Stage 6: Deploy Gate ──────────────────────────────
+  deploy:
+    name: "Deploy · Gate Check"
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, security, docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: "🚦 Evaluate deployment readiness"
+        run: |
+          echo "══════════════════════════════════════════════"
+          echo "  DevPulse Deployment Gate"
+          echo "══════════════════════════════════════════════"
+          echo ""
+
+          BACKEND_TESTS="${{ needs.backend.outputs.test_result }}"
+          FRONTEND_BUILD="${{ needs.frontend.outputs.build_result }}"
+          CRITICAL_VULNS=${{ needs.security.outputs.vuln_critical || 0 }}
+          DOCKER_BUILD="${{ needs.docker.outputs.build_result }}"
+
+          PASS=true
+
+          echo "  Backend Tests    : $BACKEND_TESTS"
+          echo "  Frontend Build   : $FRONTEND_BUILD"
+          echo "  Critical CVEs    : $CRITICAL_VULNS"
+          echo "  Docker Build     : $DOCKER_BUILD"
+          echo ""
+
+          if [ "$BACKEND_TESTS" = "failure" ]; then
+            echo "  ❌ BLOCKED: Backend tests failed"
+            PASS=false
+          fi
+
+          if [ "$FRONTEND_BUILD" = "failure" ]; then
+            echo "  ❌ BLOCKED: Frontend build failed"
+            PASS=false
+          fi
+
+          if [ "$CRITICAL_VULNS" -gt 0 ]; then
+            echo "  ❌ BLOCKED: $CRITICAL_VULNS critical vulnerabilities detected"
+            PASS=false
+          fi
+
+          if [ "$DOCKER_BUILD" = "failure" ]; then
+            echo "  ❌ BLOCKED: Docker image build failed"
+            PASS=false
+          fi
+
+          echo ""
+
+          if [ "$PASS" = true ]; then
+            echo "  ══════════════════════════════════════"
+            echo "  ✅  Deployment Successful"
+            echo "  ══════════════════════════════════════"
+            echo "  All quality gates passed."
+            echo "  Image: ${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+          else
+            echo "  ══════════════════════════════════════"
+            echo "  🚫  Deployment Blocked"
+            echo "  ══════════════════════════════════════"
+            echo "  Fix the above issues before deploying."
+            exit 1
+          fi
