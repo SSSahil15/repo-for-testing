@@ -10,7 +10,6 @@
     "test": "echo \"Frontend tests: placeholder — add Vitest when ready\" && exit 0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.8",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",

@@ -8,10 +8,6 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   BACKEND_URL: z.string().url().default("http://localhost:4000"),
   FRONTEND_URL: z.string().url().default("http://localhost:5173"),
-  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL."),
-  SUPABASE_PUBLISHABLE_KEY: z
-    .string()
-    .min(1, "SUPABASE_PUBLISHABLE_KEY is required."),
   TOKEN_ENCRYPTION_SECRET: z
     .string()
     .min(32, "TOKEN_ENCRYPTION_SECRET must be at least 32 characters long."),
@@ -53,8 +49,6 @@ module.exports = {
   jwtSecret: env.JWT_SECRET,
   nodeEnv: env.NODE_ENV,
   port: env.PORT,
-  supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY,
-  supabaseUrl: env.SUPABASE_URL,
   tokenEncryptionSecret: env.TOKEN_ENCRYPTION_SECRET,
   discordWebhookUrl: env.DISCORD_WEBHOOK_URL,
   smtp: {

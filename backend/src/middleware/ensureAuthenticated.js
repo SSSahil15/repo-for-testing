@@ -33,8 +33,6 @@ const ensureAuthenticated = asyncHandler(async (req, res, next) => {
     privateRepos: payload.privateRepos,
   };
 
-  // Keep supabaseUser alias for backwards compatibility with existing routes
-  req.supabaseUser = { id: payload.sub };
 
   return next();
 });
