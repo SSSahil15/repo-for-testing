@@ -1,76 +1,167 @@
-# DevPulse
+<div align="center">
+  <img src="./frontend/public/vite.svg" width="80" alt="DevPulse Logo" />
+  <h1>DevPulse</h1>
+  <p><strong>Intelligent DevSecOps Platform & AI Pipeline Copilot</strong></p>
+  
+  <p>
+    <img src="https://img.shields.io/badge/react-18.x-blue.svg" alt="React" />
+    <img src="https://img.shields.io/badge/node.js-24.x-green.svg" alt="Node" />
+    <img src="https://img.shields.io/badge/python-3.11-yellow.svg" alt="Python" />
+    <img src="https://img.shields.io/badge/ai-Groq-orange.svg" alt="Groq" />
+  </p>
+</div>
 
-DevPulse is an AI-powered DevSecOps platform that helps teams authenticate with GitHub, select repositories, run intelligent CI/CD analysis, and surface actionable risk insights.
+---
 
-## Current Progress
+## 📖 Overview
 
-This bootstrap includes:
+**DevPulse** is a production-grade DevSecOps platform that analyzes your GitHub repositories, calculates a comprehensive "DevPulse Score," and provides an intelligent, action-oriented AI Copilot to help you fix vulnerabilities, improve test stability, and prevent deployment failures.
 
-- A production-minded project structure
-- A Node.js + Express backend secured by Supabase JWT validation
-- Encrypted server-side storage for GitHub provider tokens
-- Repository listing via the GitHub API
-- A React frontend with Supabase GitHub login, callback handling, dashboard, repository selection, and analysis views
-- A starter `/analyze` endpoint contract for the upcoming CI, Trivy, and ML steps
+By merging CI/CD heuristics, Trivy container security scanning, and Predictive ML modeling, DevPulse surfaces exactly what matters, when it matters.
 
-## Project Structure
+---
+
+## ✨ Key Features
+
+- 🔒 **Secure GitHub OAuth**: Authenticate via Supabase with encrypted, server-side GitHub provider tokens.
+- 📊 **The DevPulse Score**: A proprietary 0-100 metric calculated from security vulnerabilities, test results, and ML-driven predictive failure analysis.
+- 🤖 **Action-First AI Copilot**: A context-aware chat widget powered by `llama-3.3-70b-versatile` (via Groq). Automatically references pipeline data, cites CVEs, and provides one-click action buttons to solve issues fast.
+- 🛡️ **Intelligent Fallback**: Even if the LLM API is unavailable, DevPulse falls back to a deterministic, data-driven reasoning engine to guide you.
+- 🔗 **Shareable Reports**: Generate unique, publicly accessible report links to share pipeline health with your team.
+
+---
+
+## 🛠️ Tech Stack
+
+**Frontend**
+- React 18 & Vite
+- Tailwind CSS (Glassmorphism design, Dark Mode)
+- Supabase Auth (GitHub OAuth)
+- Recharts (Data Visualization)
+- Lucide React (Icons)
+
+**Backend (Node.js)**
+- Express.js
+- Axios (GitHub API, LLM API calls)
+- Cryptography for token encryption
+- Nodemon (Development)
+
+**AI Microservice (Python)**
+- FastAPI & Uvicorn
+- Scikit-learn (RandomForestClassifier for predictive failure analysis)
+- Pandas & NumPy
+
+---
+
+## 🏗️ Architecture
 
 ```text
 devpulse/
-├── .github/workflows/      # GitHub Actions workflows
-├── ai/                     # Python ML model and explanation engine
-├── backend/                # Express API and GitHub OAuth server
-├── docker/                 # Docker assets added in later steps
-└── frontend/               # React dashboard added in the next step
+├── ai/                     # Python FastAPI Predictive ML microservice
+├── backend/                # Node.js/Express API & Orchestration Server
+├── frontend/               # React / Vite Web Dashboard
+├── docker/                 # Production Docker configuration
+└── .github/workflows/      # GitHub Actions CI/CD pipelines
 ```
 
-## Quick Start
+---
 
-1. Create a Supabase project
-2. In Supabase Authentication -> Providers, enable GitHub
-3. Register the GitHub OAuth app using the Supabase callback URL:
-   `https://<project-ref>.supabase.co/auth/v1/callback`
-4. Add `http://localhost:5173/auth/callback` to the Supabase redirect allow list
-5. Copy `backend/.env.example` to `backend/.env`
-6. Copy `frontend/.env.example` to `frontend/.env`
-7. Fill in the Supabase project URL and publishable key in both files
-8. Install backend dependencies:
+## 📸 Screenshots
 
-   ```bash
-   cd backend
-   npm install
-   ```
+*(Replace these placeholders with actual screenshots of your running application)*
 
-9. Start the API server:
+### Dashboard & Analysis Panel
+![Dashboard Placeholder](https://via.placeholder.com/800x450.png?text=Dashboard+%26+Analysis+Panel)
 
-   ```bash
-   npm run dev
-   ```
+### AI Copilot & Suggested Actions
+![Copilot Placeholder](https://via.placeholder.com/800x450.png?text=Action-First+AI+Copilot)
 
-The backend will start on `http://localhost:4000`.
+---
 
-## Frontend Quick Start
+## 🚀 Local Setup & Installation
 
-1. Install frontend dependencies:
+### Prerequisites
+- Node.js (v24+)
+- Python (v3.11+)
+- Supabase Project
+- Groq API Key
+- GitHub account
 
-   ```bash
-   cd frontend
-   npm install
-   ```
+### 1. Environment Configuration
 
-2. Start the frontend:
+You will need to set up environment variables in **two** places. 
 
-   ```bash
-   npm run dev
-   ```
+**Backend (`backend/.env`):**
+```env
+PORT=4000
+FRONTEND_URL=http://localhost:5173
+BACKEND_URL=http://localhost:4000
 
-The React app will start on `http://localhost:5173`.
+# Supabase details
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 
-## Available API Endpoints
+# 32-character secret for encrypting GitHub tokens
+TOKEN_ENCRYPTION_SECRET=12345678901234567890123456789012
 
-- `GET /health`
-- `GET /auth/me`
-- `POST /auth/provider-token`
-- `DELETE /auth/provider-token`
-- `GET /repos`
-- `POST /analyze`
+# LLM integration
+GROQ_API_KEY=your-groq-api-key
+```
+
+**Frontend (`frontend/.env`):**
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-publishable-key
+VITE_API_URL=http://localhost:4000
+```
+
+*Note: Make sure to configure GitHub as an Auth Provider inside your Supabase project dashboard.*
+
+### 2. Start the AI Microservice (Terminal 1)
+
+The AI engine runs on Python/FastAPI.
+
+```bash
+cd ai
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --reload --port 8000
+```
+
+### 3. Start the Backend (Terminal 2)
+
+The Node orchestrator connects the frontend, GitHub, and the AI microservice.
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+### 4. Start the Frontend (Terminal 3)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+> **The application will now be running at [http://localhost:5173](http://localhost:5173)**
+
+---
+
+## 🕹️ Usage Workflow
+
+1. Navigate to `http://localhost:5173` and log in via GitHub.
+2. The dashboard will automatically fetch your GitHub repositories.
+3. Click on a repository to initiate an analysis.
+4. The system will simulate a CI/CD run, fetch a Trivy security scan, and request predictive failure metrics from the Python microservice.
+5. Review your **DevPulse Score**.
+6. Open the floating **AI Copilot** widget in the bottom right corner to discuss vulnerabilities, view root causes, and get specific patching instructions.
+7. Click "Share Report" to generate a public dashboard URL.
+
+---
+
+## 📝 License
+MIT License.
