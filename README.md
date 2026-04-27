@@ -163,5 +163,27 @@ npm run dev
 
 ---
 
+## ☁️ Next Up: Cloud Docker Deployment
+
+The upcoming phase of DevPulse involves containerizing the entire platform and deploying it to the cloud.
+
+### Deployment Architecture
+- **Docker Compose**: Orchestrating the Frontend, Backend, and AI Microservice into a unified network.
+- **Reverse Proxy (Nginx/Traefik)**: To handle SSL termination and routing requests between the React frontend and the Express/FastAPI backends.
+- **Cloud Provider**: Target deployment on AWS ECS or a DigitalOcean Droplet.
+
+### Planned Docker Commands
+Once the `docker-compose.yml` is finalized in the next release, running the entire stack will be as simple as:
+
+```bash
+# Build and start all services in detached mode
+docker-compose up -d --build
+
+# View unified logs
+docker-compose logs -f
+```
+
+---
+
 ## 📝 License
 MIT License.
