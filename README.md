@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./frontend/public/vite.svg" width="80" alt="DevPulse Logo" />
+  <img src="./assets/logo.png" width="120" alt="DevPulse Logo" />
   <h1>DevPulse</h1>
   <p><strong>Intelligent DevSecOps Platform & AI Pipeline Copilot</strong></p>
   
@@ -68,13 +68,11 @@ devpulse/
 
 ## 📸 Screenshots
 
-*(Replace these placeholders with actual screenshots of your running application)*
-
 ### Dashboard & Analysis Panel
-![Dashboard Placeholder](https://via.placeholder.com/800x450.png?text=Dashboard+%26+Analysis+Panel)
+![Dashboard](./assets/dashboard.png)
 
 ### AI Copilot & Suggested Actions
-![Copilot Placeholder](https://via.placeholder.com/800x450.png?text=Action-First+AI+Copilot)
+![AI Copilot](./assets/copilot.png)
 
 ---
 
