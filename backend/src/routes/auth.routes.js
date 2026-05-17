@@ -19,13 +19,20 @@ const router = express.Router();
  * Step 1: Redirect user to GitHub OAuth authorization page.
  */
 router.get("/github", (req, res) => {
+  const callbackUrl = `${config.backendUrl}/auth/github/callback`;
+  console.log("[OAuth] Starting GitHub OAuth flow");
+  console.log("[OAuth] Client ID:", config.githubClientId);
+  console.log("[OAuth] Redirect URI:", callbackUrl);
+  
   const params = new URLSearchParams({
     client_id: config.githubClientId,
-    redirect_uri: `${config.backendUrl}/auth/github/callback`,
+    redirect_uri: callbackUrl,
     scope: "repo read:user user:email",
     prompt: "consent", // Force GitHub to ask for permission every time
   });
-  res.redirect(`https://github.com/login/oauth/authorize?${params}`);
+  const authUrl = `https://github.com/login/oauth/authorize?${params}`;
+  console.log("[OAuth] Full auth URL:", authUrl);
+  res.redirect(authUrl);
 });
 
 /**
@@ -35,15 +42,26 @@ router.get("/github", (req, res) => {
 router.get(
   "/github/callback",
   asyncHandler(async (req, res) => {
-    const { code, error } = req.query;
+    const { code, error, state } = req.query;
+
+    console.log("[OAuth Callback] Received callback");
+    console.log("[OAuth Callback] Code:", code ? code.substring(0, 10) + "..." : "missing");
+    console.log("[OAuth Callback] Error:", error || "none");
+    console.log("[OAuth Callback] State:", state || "none");
 
     if (error || !code) {
+      console.error("[OAuth Callback] Auth denied or no code:", error);
       return res.redirect(`${config.frontendUrl}/login?error=github_denied`);
     }
 
     try {
+      console.log("[OAuth Callback] Exchanging code for token...");
       const githubToken = await exchangeCodeForGitHubToken(code);
+      console.log("[OAuth Callback] Token received successfully");
+      
+      console.log("[OAuth Callback] Fetching GitHub user...");
       const githubUser = await fetchGitHubUser(githubToken);
+      console.log("[OAuth Callback] GitHub user fetched:", githubUser.login);
 
       // Save the GitHub token using the GitHub user ID as the key
       await saveGitHubProviderToken({
@@ -59,12 +77,14 @@ router.get(
 
       const devpulseToken = issueDevPulseJWT(githubUser);
 
+      const redirectUrl = `${config.frontendUrl}/auth/callback?token=${devpulseToken}`;
+      console.log("[OAuth Callback] Redirecting to:", redirectUrl.split("?")[0]);
+      
       // Redirect to frontend with the token in the URL
-      return res.redirect(
-        `${config.frontendUrl}/auth/callback?token=${devpulseToken}`
-      );
+      return res.redirect(redirectUrl);
     } catch (err) {
-      console.error("GitHub OAuth callback error:", err.message);
+      console.error("[OAuth Callback] Error during auth flow:", err.message);
+      console.error("[OAuth Callback] Full error:", err);
       return res.redirect(`${config.frontendUrl}/login?error=auth_failed`);
     }
   })
