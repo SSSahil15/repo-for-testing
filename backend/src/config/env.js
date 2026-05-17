@@ -27,12 +27,31 @@ const envSchema = z.object({
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
-  console.error("Invalid environment configuration:");
-  console.error(parsedEnv.error.flatten().fieldErrors);
+  console.error("[Config] ❌ Invalid environment configuration:");
+  const errors = parsedEnv.error.flatten().fieldErrors;
+  Object.entries(errors).forEach(([key, msgs]) => {
+    console.error(`  - ${key}: ${msgs.join(", ")}`);
+  });
+  console.error("\n[Config] Required variables:");
+  console.error("  - GITHUB_CLIENT_ID");
+  console.error("  - GITHUB_CLIENT_SECRET");
+  console.error("  - TOKEN_ENCRYPTION_SECRET (min 32 chars)");
+  console.error("  - JWT_SECRET (min 32 chars)");
+  console.error("  - BACKEND_URL");
+  console.error("  - FRONTEND_URL");
+  console.error("  - AI_SERVICE_URL");
   throw new Error("Failed to start due to invalid environment variables.");
 }
 
 const env = parsedEnv.data;
+
+console.log("[Config] ✓ Environment loaded successfully");
+console.log("[Config]   NODE_ENV:", env.NODE_ENV);
+console.log("[Config]   PORT:", env.PORT);
+console.log("[Config]   DATABASE_PATH:", env.DATABASE_PATH);
+console.log("[Config]   BACKEND_URL:", env.BACKEND_URL);
+console.log("[Config]   FRONTEND_URL:", env.FRONTEND_URL);
+console.log("[Config]   AI_SERVICE_URL:", env.AI_SERVICE_URL);
 
 module.exports = {
   backendUrl: env.BACKEND_URL,
