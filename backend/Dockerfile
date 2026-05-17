@@ -32,13 +32,18 @@ ARG TRIVY_VERSION=0.51.0
 # Install basic tools first
 RUN apk add --no-cache ca-certificates git libstdc++ tar wget curl
 
-# Install Trivy (fail build if download/extract fails)
-RUN wget -qO /tmp/trivy.tar.gz \
-    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-  && tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy \
-  && chmod +x /usr/local/bin/trivy \
-  && rm /tmp/trivy.tar.gz \
-  && trivy --version
+# Install Trivy (robust): resolve the correct asset filename via GitHub releases API
+RUN set -eux; \
+  apk add --no-cache --virtual .trivy-deps jq; \
+  release_json="$(wget -qO- "https://api.github.com/repos/aquasecurity/trivy/releases/tags/v${TRIVY_VERSION}" -U "Docker" )"; \
+  asset_url="$(printf "%s" "$release_json" | jq -r '.assets[] | select(.name|test("Linux-64bit")) | .browser_download_url' | head -n 1)"; \
+  if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then echo "Trivy asset not found for v${TRIVY_VERSION}" >&2; exit 1; fi; \
+  wget -qO /tmp/trivy.tar.gz "$asset_url"; \
+  tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy; \
+  chmod +x /usr/local/bin/trivy; \
+  rm -f /tmp/trivy.tar.gz; \
+  trivy --version; \
+  apk del .trivy-deps
 
 
 WORKDIR /app
