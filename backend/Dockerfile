@@ -39,7 +39,9 @@ RUN set -eux; \
   echo "[Trivy] install.sh downloaded (first 5 lines):"; \
   head -n 5 /tmp/install-trivy.sh || true; \
   chmod +x /tmp/install-trivy.sh; \
-  sh -x /tmp/install-trivy.sh --version "${TRIVY_VERSION}" --install-dir /usr/local/bin; \
+  # install.sh usage: [-b] bindir [-c] client [-d] [-x] [tag]
+  # Provide TRIVY_VERSION as the tag (e.g., v0.70.0). No '--version' flag.
+  sh -x /tmp/install-trivy.sh -b /usr/local/bin "v${TRIVY_VERSION}"; \
   test -x /usr/local/bin/trivy; \
   /usr/local/bin/trivy --version; \
   apk del .trivy-deps; \
