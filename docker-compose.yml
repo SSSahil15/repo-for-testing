@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: devpulse-backend:latest
+    container_name: devpulse_backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DATABASE_URL=postgresql://devpulse:devpulse@postgres:5432/devpulse
+      - REDIS_URL=redis://redis:6379
+      - BACKEND_URL=http://localhost:4000
+      - FRONTEND_URL=http://localhost:5173
+      - AI_SERVICE_URL=http://ai:8000
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - JWT_SECRET=${JWT_SECRET:-fallback_secret_key_for_dev}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-12345678901234567890123456789012}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    depends_on:
+      - ai
+      - postgres
+      - redis
+    networks:
+      - devpulse_network
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile
+    image: devpulse-ai:latest
+    container_name: devpulse_ai
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    networks:
+      - devpulse_network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: devpulse_postgres
+    environment:
+      - POSTGRES_USER=devpulse
+      - POSTGRES_PASSWORD=devpulse
+      - POSTGRES_DB=devpulse
+    ports:
+      - "5432:5432"
+    volumes:
+      - devpulse_pgdata:/var/lib/postgresql/data
+    networks:
+      - devpulse_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: devpulse_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - devpulse_network
+    restart: unless-stopped
+
+volumes:
+  devpulse_pgdata:
+    name: devpulse_postgres_data
+
+networks:
+  devpulse_network:
+    name: devpulse_local_net

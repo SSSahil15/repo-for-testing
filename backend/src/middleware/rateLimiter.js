@@ -34,10 +34,10 @@ const aiChatLimiter = createLimiter({
   name: "AI Copilot",
 });
 
-/** Pipeline simulate — 10 requests per minute per IP */
+/** Pipeline simulate — 5 requests per hour per IP */
 const simulateLimiter = createLimiter({
-  windowMs: 60 * 1000,
-  max: 10,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
   name: "pipeline simulation",
 });
 

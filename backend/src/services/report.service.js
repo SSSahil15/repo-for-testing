@@ -11,7 +11,7 @@ function generateShareToken() {
 /**
  * Create a shareable report snapshot (persisted to SQLite).
  */
-function createReport({ repository, repoMeta, devpulseScore, stages, insights, createdBy }) {
+async function createReport({ repository, repoMeta, devpulseScore, stages, insights, createdBy }) {
   const token = generateShareToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -35,7 +35,7 @@ function createReport({ repository, repoMeta, devpulseScore, stages, insights, c
     expiresAt: expiresAt.toISOString(),
   };
 
-  reportDB.insert(report);
+  await reportDB.insert(report);
   console.log(`[Reports] Created shareable report for ${repository} (token: ${token}), expires ${expiresAt.toDateString()}`);
   return report;
 }
@@ -44,8 +44,8 @@ function createReport({ repository, repoMeta, devpulseScore, stages, insights, c
  * Retrieve a report by its share token.
  * Checks expiry and returns { expired: true } if past TTL.
  */
-function getReportByToken(token) {
-  const report = reportDB.getByToken(token);
+async function getReportByToken(token) {
+  const report = await reportDB.getByToken(token);
   if (!report) return null;
 
   if (new Date(report.expiresAt) < new Date()) {

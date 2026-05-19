@@ -1,158 +1,81 @@
-/**
- * DevPulse SQLite Database Layer
- * ================================
- * Uses `better-sqlite3` (synchronous, zero-config, embedded).
- * All tables are auto-created on startup via the `migrate()` call.
- *
- * Tables:
- *   pipeline_results  — Stores every CI/CD pipeline run record
- *   scan_jobs         — Tracks async Trivy scan job status
- *   reports           — Shareable report snapshots (7-day TTL)
- *   provider_tokens   — Encrypted GitHub OAuth tokens (replaces JSON file)
- */
-
-const path = require("path");
-const fs = require("fs");
-const Database = require("better-sqlite3");
-const config = require("../config/env");
-
-const DB_PATH = config.databasePath;
-
-// Ensure the data directory exists
-const dbDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
-
-const db = new Database(DB_PATH);
-
-// Enable WAL mode for better concurrent read performance
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-// ─── Schema Migration ─────────────────────────────────────────────────────────
-
-function migrate() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pipeline_results (
-      id            TEXT PRIMARY KEY,
-      repository    TEXT NOT NULL,
-      commit_sha    TEXT,
-      commit_message TEXT,
-      branch        TEXT,
-      triggered_by  TEXT,
-      run_id        TEXT,
-      run_url       TEXT,
-      event         TEXT,
-      timestamp     TEXT,
-      received_at   TEXT NOT NULL,
-      overall_status TEXT,
-      stages        TEXT NOT NULL,
-      devpulse_score TEXT NOT NULL,
-      insights      TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_pipeline_repository ON pipeline_results(repository);
-    CREATE INDEX IF NOT EXISTS idx_pipeline_branch     ON pipeline_results(branch);
-    CREATE INDEX IF NOT EXISTS idx_pipeline_received   ON pipeline_results(received_at DESC);
-
-    CREATE TABLE IF NOT EXISTS scan_jobs (
-      id          TEXT PRIMARY KEY,
-      repository  TEXT NOT NULL,
-      status      TEXT NOT NULL DEFAULT 'pending',
-      created_at  TEXT NOT NULL,
-      updated_at  TEXT NOT NULL,
-      result      TEXT,
-      error       TEXT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_scanjob_repository ON scan_jobs(repository);
-    CREATE INDEX IF NOT EXISTS idx_scanjob_status     ON scan_jobs(status);
-
-    CREATE TABLE IF NOT EXISTS reports (
-      token        TEXT PRIMARY KEY,
-      repository   TEXT NOT NULL,
-      repo_meta    TEXT,
-      devpulse_score TEXT,
-      stages       TEXT,
-      insights     TEXT,
-      created_by   TEXT,
-      created_at   TEXT NOT NULL,
-      expires_at   TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_report_repository ON reports(repository);
-    CREATE INDEX IF NOT EXISTS idx_report_expires    ON reports(expires_at);
-
-    CREATE TABLE IF NOT EXISTS provider_tokens (
-      user_id          TEXT PRIMARY KEY,
-      encrypted_token  TEXT NOT NULL,
-      github_login     TEXT,
-      profile_url      TEXT,
-      synced_at        TEXT NOT NULL
-    );
-  `);
-
-  console.log(`[DB] SQLite database ready at ${DB_PATH}`);
-}
-
-// Run migration on module load
-migrate();
+const { pool, migrate } = require("./postgres");
 
 // ─── Pipeline Results Helpers ─────────────────────────────────────────────────
 
-const pipelineStmts = {
-  insert: db.prepare(`
-    INSERT INTO pipeline_results
-      (id, repository, commit_sha, commit_message, branch, triggered_by,
-       run_id, run_url, event, timestamp, received_at, overall_status,
-       stages, devpulse_score, insights)
-    VALUES
-      (@id, @repository, @commitSha, @commitMessage, @branch, @triggeredBy,
-       @runId, @runUrl, @event, @timestamp, @receivedAt, @overallStatus,
-       @stages, @devpulseScore, @insights)
-  `),
+const pipelineDB = {
+  async insert(record) {
+    const query = `
+      INSERT INTO pipeline_results
+        (id, repository, commit_sha, commit_message, branch, triggered_by,
+         run_id, run_url, event, timestamp, received_at, overall_status,
+         stages, devpulse_score, insights)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    `;
+    await pool.query(query, [
+      record.id,
+      record.repository,
+      record.commitSha,
+      record.commitMessage,
+      record.branch,
+      record.triggeredBy,
+      record.runId,
+      record.runUrl,
+      record.event,
+      record.timestamp,
+      record.receivedAt,
+      record.overallStatus,
+      record.stages,
+      record.devpulseScore,
+      record.insights,
+    ]);
+  },
 
-  findAll: db.prepare(`
-    SELECT * FROM pipeline_results
-    ORDER BY received_at DESC
-    LIMIT ?
-  `),
+  async findFiltered({ repository, branch, limit = 20, offset = 0 }) {
+    let query, params;
+    if (repository && branch) {
+      query = `SELECT * FROM pipeline_results WHERE repository = $1 AND branch = $2 ORDER BY received_at DESC LIMIT $3 OFFSET $4`;
+      params = [repository, branch, limit, offset];
+    } else if (repository) {
+      query = `SELECT * FROM pipeline_results WHERE repository = $1 ORDER BY received_at DESC LIMIT $2 OFFSET $3`;
+      params = [repository, limit, offset];
+    } else {
+      query = `SELECT * FROM pipeline_results ORDER BY received_at DESC LIMIT $1 OFFSET $2`;
+      params = [limit, offset];
+    }
+    const { rows } = await pool.query(query, params);
+    return rows.map(parsePipelineRow);
+  },
 
-  findByRepo: db.prepare(`
-    SELECT * FROM pipeline_results
-    WHERE repository = ?
-    ORDER BY received_at DESC
-    LIMIT ?
-  `),
+  async findByRunId(runId) {
+    const { rows } = await pool.query(`SELECT * FROM pipeline_results WHERE run_id = $1 LIMIT 1`, [runId]);
+    return rows.length ? parsePipelineRow(rows[0]) : null;
+  },
 
-  findByRepoAndBranch: db.prepare(`
-    SELECT * FROM pipeline_results
-    WHERE repository = ? AND branch = ?
-    ORDER BY received_at DESC
-    LIMIT ?
-  `),
+  async deleteById(id) {
+    const { rowCount } = await pool.query(`DELETE FROM pipeline_results WHERE id = $1`, [id]);
+    return { changes: rowCount };
+  },
 
-  findByRunId: db.prepare(`
-    SELECT * FROM pipeline_results WHERE run_id = ? LIMIT 1
-  `),
+  async deleteByIds(ids) {
+    await pool.query(`DELETE FROM pipeline_results WHERE id = ANY($1)`, [ids]);
+  },
 
-  count: db.prepare(`SELECT COUNT(*) as total FROM pipeline_results`),
+  async getHealth() {
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as total FROM pipeline_results`);
+    const total = parseInt(countRows[0].total, 10);
 
-  countByStatus: db.prepare(`
-    SELECT COUNT(*) as total FROM pipeline_results WHERE overall_status = ?
-  `),
+    const { rows: successRows } = await pool.query(`SELECT COUNT(*) as total FROM pipeline_results WHERE overall_status = 'success'`);
+    const successes = parseInt(successRows[0].total, 10);
 
-  avgScore: db.prepare(`
-    SELECT AVG(CAST(json_extract(devpulse_score, '$.score') AS REAL)) as avg
-    FROM pipeline_results
-  `),
+    const { rows: avgRows } = await pool.query(`SELECT AVG((devpulse_score->>'score')::numeric) as avg FROM pipeline_results`);
+    const avgScore = total > 0 ? Math.round(parseFloat(avgRows[0].avg) || 0) : null;
 
-  latest: db.prepare(`
-    SELECT * FROM pipeline_results ORDER BY received_at DESC LIMIT 1
-  `),
+    const { rows: latestRows } = await pool.query(`SELECT * FROM pipeline_results ORDER BY received_at DESC LIMIT 1`);
+    const latest = latestRows.length ? parsePipelineRow(latestRows[0]) : null;
 
-  deleteById: db.prepare(`DELETE FROM pipeline_results WHERE id = ?`),
+    return { total, successes, avgScore, latest };
+  },
 };
 
 function parsePipelineRow(row) {
@@ -166,224 +89,134 @@ function parsePipelineRow(row) {
     runUrl: row.run_url,
     receivedAt: row.received_at,
     overallStatus: row.overall_status,
-    stages: JSON.parse(row.stages),
-    devpulseScore: JSON.parse(row.devpulse_score),
-    insights: JSON.parse(row.insights),
+    stages: row.stages,
+    devpulseScore: row.devpulse_score,
+    insights: row.insights,
   };
 }
 
-const pipelineDB = {
-  insert(record) {
-    pipelineStmts.insert.run({
-      id: record.id,
-      repository: record.repository,
-      commitSha: record.commitSha,
-      commitMessage: record.commitMessage,
-      branch: record.branch,
-      triggeredBy: record.triggeredBy,
-      runId: record.runId,
-      runUrl: record.runUrl,
-      event: record.event,
-      timestamp: record.timestamp,
-      receivedAt: record.receivedAt,
-      overallStatus: record.overallStatus,
-      stages: JSON.stringify(record.stages),
-      devpulseScore: JSON.stringify(record.devpulseScore),
-      insights: JSON.stringify(record.insights),
-    });
-  },
-
-  findFiltered({ repository, branch, limit = 20 }) {
-    let rows;
-    if (repository && branch) {
-      rows = pipelineStmts.findByRepoAndBranch.all(repository, branch, limit);
-    } else if (repository) {
-      rows = pipelineStmts.findByRepo.all(repository, limit);
-    } else {
-      rows = pipelineStmts.findAll.all(limit);
-    }
-    return rows.map(parsePipelineRow);
-  },
-
-  findByRunId(runId) {
-    return parsePipelineRow(pipelineStmts.findByRunId.get(runId));
-  },
-
-  deleteById(id) {
-    return pipelineStmts.deleteById.run(id);
-  },
-
-  deleteByIds(ids) {
-    const del = db.transaction((idList) => {
-      for (const id of idList) pipelineStmts.deleteById.run(id);
-    });
-    del(ids);
-  },
-
-  getHealth() {
-    const total = pipelineStmts.count.get().total;
-    const successes = pipelineStmts.countByStatus.get("success").total;
-    const avgScore = total > 0 ? Math.round(pipelineStmts.avgScore.get().avg || 0) : null;
-    const latest = parsePipelineRow(pipelineStmts.latest.get());
-    return { total, successes, avgScore, latest };
-  },
-};
-
 // ─── Scan Job Helpers ─────────────────────────────────────────────────────────
 
-const scanJobStmts = {
-  insert: db.prepare(`
-    INSERT INTO scan_jobs (id, repository, status, created_at, updated_at)
-    VALUES (@id, @repository, 'pending', @createdAt, @createdAt)
-  `),
-
-  getById: db.prepare(`SELECT * FROM scan_jobs WHERE id = ? LIMIT 1`),
-
-  updateDone: db.prepare(`
-    UPDATE scan_jobs SET status = 'done', result = ?, updated_at = ? WHERE id = ?
-  `),
-
-  updateFailed: db.prepare(`
-    UPDATE scan_jobs SET status = 'failed', error = ?, updated_at = ? WHERE id = ?
-  `),
-
-  updateProcessing: db.prepare(`
-    UPDATE scan_jobs SET status = 'processing', updated_at = ? WHERE id = ?
-  `),
-};
-
 const scanJobDB = {
-  create(id, repository) {
+  async create(id, repository) {
     const now = new Date().toISOString();
-    scanJobStmts.insert.run({ id, repository, createdAt: now });
+    await pool.query(`
+      INSERT INTO scan_jobs (id, repository, status, created_at, updated_at)
+      VALUES ($1, $2, 'pending', $3, $3)
+    `, [id, repository, now]);
   },
 
-  getById(id) {
-    const row = scanJobStmts.getById.get(id);
-    if (!row) return null;
+  async getById(id) {
+    const { rows } = await pool.query(`SELECT * FROM scan_jobs WHERE id = $1 LIMIT 1`, [id]);
+    if (!rows.length) return null;
+    const row = rows[0];
     return {
       ...row,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      result: row.result ? JSON.parse(row.result) : null,
+      result: row.result,
     };
   },
 
-  markProcessing(id) {
-    scanJobStmts.updateProcessing.run(new Date().toISOString(), id);
+  async markProcessing(id) {
+    await pool.query(`UPDATE scan_jobs SET status = 'processing', updated_at = $1 WHERE id = $2`, [new Date().toISOString(), id]);
   },
 
-  markDone(id, result) {
-    scanJobStmts.updateDone.run(JSON.stringify(result), new Date().toISOString(), id);
+  async markDone(id, result) {
+    await pool.query(`UPDATE scan_jobs SET status = 'done', result = $1, updated_at = $2 WHERE id = $3`, [result, new Date().toISOString(), id]);
   },
 
-  markFailed(id, errorMsg) {
-    scanJobStmts.updateFailed.run(errorMsg, new Date().toISOString(), id);
+  async markFailed(id, errorMsg) {
+    await pool.query(`UPDATE scan_jobs SET status = 'failed', error = $1, updated_at = $2 WHERE id = $3`, [errorMsg, new Date().toISOString(), id]);
   },
 };
 
 // ─── Report Helpers ───────────────────────────────────────────────────────────
 
-const reportStmts = {
-  insert: db.prepare(`
-    INSERT INTO reports
-      (token, repository, repo_meta, devpulse_score, stages, insights, created_by, created_at, expires_at)
-    VALUES
-      (@token, @repository, @repoMeta, @devpulseScore, @stages, @insights, @createdBy, @createdAt, @expiresAt)
-  `),
-
-  getByToken: db.prepare(`SELECT * FROM reports WHERE token = ? LIMIT 1`),
-
-  deleteExpired: db.prepare(`DELETE FROM reports WHERE expires_at < ?`),
-};
-
 const reportDB = {
-  insert(report) {
-    reportStmts.insert.run({
-      token: report.token,
-      repository: report.repository,
-      repoMeta: JSON.stringify(report.repoMeta),
-      devpulseScore: JSON.stringify(report.devpulseScore),
-      stages: JSON.stringify(report.stages),
-      insights: JSON.stringify(report.insights),
-      createdBy: report.createdBy,
-      createdAt: report.createdAt,
-      expiresAt: report.expiresAt,
-    });
+  async insert(report) {
+    await pool.query(`
+      INSERT INTO reports
+        (token, repository, repo_meta, devpulse_score, stages, insights, created_by, created_at, expires_at)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      report.token, report.repository, report.repoMeta, report.devpulseScore, report.stages,
+      report.insights, report.createdBy, report.createdAt, report.expiresAt
+    ]);
   },
 
-  getByToken(token) {
-    const row = reportStmts.getByToken.get(token);
-    if (!row) return null;
+  async getByToken(token) {
+    const { rows } = await pool.query(`SELECT * FROM reports WHERE token = $1 LIMIT 1`, [token]);
+    if (!rows.length) return null;
+    const row = rows[0];
     return {
       token: row.token,
       repository: row.repository,
-      repoMeta: JSON.parse(row.repo_meta || "{}"),
-      devpulseScore: JSON.parse(row.devpulse_score || "null"),
-      stages: JSON.parse(row.stages || "null"),
-      insights: JSON.parse(row.insights || "null"),
+      repoMeta: row.repo_meta || {},
+      devpulseScore: row.devpulse_score || null,
+      stages: row.stages || null,
+      insights: row.insights || null,
       createdBy: row.created_by,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     };
   },
 
-  cleanupExpired() {
-    const result = reportStmts.deleteExpired.run(new Date().toISOString());
-    if (result.changes > 0) {
-      console.log(`[DB] Cleaned up ${result.changes} expired report(s).`);
+  async cleanupExpired() {
+    const { rowCount } = await pool.query(`DELETE FROM reports WHERE expires_at < $1`, [new Date().toISOString()]);
+    if (rowCount > 0) {
+      console.log(`[DB] Cleaned up ${rowCount} expired report(s).`);
     }
   },
 };
 
 // ─── Provider Token Helpers ───────────────────────────────────────────────────
 
-const tokenStmts = {
-  upsert: db.prepare(`
-    INSERT INTO provider_tokens (user_id, encrypted_token, github_login, profile_url, synced_at)
-    VALUES (@userId, @encryptedToken, @githubLogin, @profileUrl, @syncedAt)
-    ON CONFLICT(user_id) DO UPDATE SET
-      encrypted_token = excluded.encrypted_token,
-      github_login    = excluded.github_login,
-      profile_url     = excluded.profile_url,
-      synced_at       = excluded.synced_at
-  `),
-
-  getByUserId: db.prepare(`SELECT * FROM provider_tokens WHERE user_id = ? LIMIT 1`),
-
-  deleteByUserId: db.prepare(`DELETE FROM provider_tokens WHERE user_id = ?`),
-};
-
 const providerTokenDB = {
-  upsert({ userId, encryptedToken, githubLogin, profileUrl }) {
-    tokenStmts.upsert.run({
-      userId,
-      encryptedToken,
-      githubLogin: githubLogin || null,
-      profileUrl: profileUrl || null,
-      syncedAt: new Date().toISOString(),
-    });
+  async upsert({ userId, encryptedToken, githubLogin, profileUrl }) {
+    await pool.query(`
+      INSERT INTO provider_tokens (user_id, encrypted_token, github_login, profile_url, synced_at)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT(user_id) DO UPDATE SET
+        encrypted_token = EXCLUDED.encrypted_token,
+        github_login    = EXCLUDED.github_login,
+        profile_url     = EXCLUDED.profile_url,
+        synced_at       = EXCLUDED.synced_at
+    `, [userId, encryptedToken, githubLogin || null, profileUrl || null, new Date().toISOString()]);
   },
 
-  getByUserId(userId) {
-    return tokenStmts.getByUserId.get(userId) || null;
+  async getByUserId(userId) {
+    const { rows } = await pool.query(`SELECT * FROM provider_tokens WHERE user_id = $1 LIMIT 1`, [userId]);
+    return rows.length ? rows[0] : null;
   },
 
-  deleteByUserId(userId) {
-    tokenStmts.deleteByUserId.run(userId);
+  async deleteByUserId(userId) {
+    await pool.query(`DELETE FROM provider_tokens WHERE user_id = $1`, [userId]);
   },
 };
 
-// ─── Cleanup job: run once per hour ──────────────────────────────────────────
-const pipelineCleanupStmt = db.prepare(
-  `DELETE FROM pipeline_results WHERE datetime(received_at) < datetime('now', '-7 days')`
-);
+// Initialize DB and background jobs
+if (process.env.NODE_ENV !== "test") {
+  (async () => {
+    try {
+      await migrate();
 
-const cleanupInterval = setInterval(() => {
-  reportDB.cleanupExpired();
-  const r = pipelineCleanupStmt.run();
-  if (r.changes > 0) console.log(`[DB] Cleaned up ${r.changes} pipeline result(s) older than 7 days.`);
-}, 60 * 60 * 1000);
-cleanupInterval.unref?.();
+      // ─── Cleanup job: run once per hour ──────────────────────────────────────────
+      const cleanupInterval = setInterval(async () => {
+        try {
+          await reportDB.cleanupExpired();
+          const { rowCount } = await pool.query(`DELETE FROM pipeline_results WHERE received_at < NOW() - INTERVAL '7 days'`);
+          if (rowCount > 0) console.log(`[DB] Cleaned up ${rowCount} pipeline result(s) older than 7 days.`);
+        } catch (err) {
+          console.error("[DB] Cleanup job error:", err);
+        }
+      }, 60 * 60 * 1000);
+      cleanupInterval.unref?.();
+    } catch (err) {
+      console.error("Failed to initialize database:", err);
+    }
+  })();
+}
 
-module.exports = { db, pipelineDB, scanJobDB, reportDB, providerTokenDB };
+module.exports = { pool, pipelineDB, scanJobDB, reportDB, providerTokenDB };

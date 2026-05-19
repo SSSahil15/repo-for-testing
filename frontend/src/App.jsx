@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { getStoredToken, clearToken, isTokenExpired, decodeJWTPayload } from "./api";
-import AuthCallbackPage from "./pages/AuthCallbackPage";
-import DashboardPage from "./pages/DashboardPage";
-import LoginPage from "./pages/LoginPage";
-import SharedReportPage from "./pages/SharedReportPage";
 import ErrorBoundary from "./components/ErrorBoundary";
+
+const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SharedReportPage = lazy(() => import("./pages/SharedReportPage"));
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -90,36 +91,38 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Routes>
-        <Route
-          path="/login"
-          element={session.status === "authenticated"
-            ? <Navigate replace to="/dashboard" />
-            : <LoginPage sessionError={session.error} />}
-        />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
-        <Route
-          path="/dashboard"
-          element={session.status !== "authenticated"
-            ? <Navigate replace to="/login" />
-            : (
-              <ErrorBoundary>
-                <DashboardPage
-                  accessToken={session.accessToken}
-                  onLogout={handleLogout}
-                  onSessionExpired={handleSessionExpired}
-                  user={session.user}
-                />
-              </ErrorBoundary>
-            )}
-        />
-        <Route path="/report/:token" element={
-          <ErrorBoundary>
-            <SharedReportPage />
-          </ErrorBoundary>
-        } />
-        <Route path="*" element={<Navigate replace to={session.status === "authenticated" ? "/dashboard" : "/login"} />} />
-      </Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route
+            path="/login"
+            element={session.status === "authenticated"
+              ? <Navigate replace to="/dashboard" />
+              : <LoginPage sessionError={session.error} />}
+          />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route
+            path="/dashboard"
+            element={session.status !== "authenticated"
+              ? <Navigate replace to="/login" />
+              : (
+                <ErrorBoundary>
+                  <DashboardPage
+                    accessToken={session.accessToken}
+                    onLogout={handleLogout}
+                    onSessionExpired={handleSessionExpired}
+                    user={session.user}
+                  />
+                </ErrorBoundary>
+              )}
+          />
+          <Route path="/report/:token" element={
+            <ErrorBoundary>
+              <SharedReportPage />
+            </ErrorBoundary>
+          } />
+          <Route path="*" element={<Navigate replace to={session.status === "authenticated" ? "/dashboard" : "/login"} />} />
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   );
 }

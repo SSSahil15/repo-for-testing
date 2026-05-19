@@ -1,6 +1,7 @@
 const axios = require("axios");
-
+const crypto = require("crypto");
 const config = require("../config/env");
+const redis = require("./redis.service");
 
 function createGitHubClient(accessToken) {
   return axios.create({
@@ -76,6 +77,15 @@ async function fetchAuthenticatedViewer(accessToken) {
 }
 
 async function fetchUserRepositories(accessToken) {
+  const tokenHash = crypto.createHash("sha256").update(accessToken).digest("hex");
+  const cacheKey = `user:repos:${tokenHash}`;
+  
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    console.log(`[GitHub] Cache HIT for user repos (${tokenHash.substring(0, 8)})`);
+    return cached;
+  }
+
   const client = createGitHubClient(accessToken);
   const repositories = await fetchPaginatedGitHubResults(client, "/user/repos", {
     affiliation: "owner,collaborator,organization_member",
@@ -84,12 +94,22 @@ async function fetchUserRepositories(accessToken) {
     sort: "updated"
   });
 
-  return repositories.map(mapRepository);
+  const mapped = repositories.map(mapRepository);
+  await redis.set(cacheKey, mapped, 3600); // 1 hour cache
+  return mapped;
 }
 
 async function fetchRepository(accessToken, repositoryFullName) {
+  const cacheKey = `repo:${repositoryFullName}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    console.log(`[GitHub] Cache HIT for repo: ${repositoryFullName}`);
+    return cached;
+  }
+
   const client = createGitHubClient(accessToken);
   const response = await client.get(`/repos/${repositoryFullName}`);
+  await redis.set(cacheKey, response.data, 3600); // 1 hour cache
   return response.data;
 }
 
@@ -180,15 +200,24 @@ async function fetchContributors(accessToken, repoFullName) {
  * Orchestrator: Fetch all repo health metrics in parallel.
  */
 async function fetchRepoHealth(accessToken, repoFullName) {
+  const cacheKey = `repo:health:${repoFullName}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    console.log(`[GitHub] Cache HIT for repo health: ${repoFullName}`);
+    return cached;
+  }
+
   const [commitActivity, contributorData] = await Promise.all([
     fetchCommitActivity(accessToken, repoFullName),
     fetchContributors(accessToken, repoFullName),
   ]);
 
-  return {
+  const health = {
     commitActivity,
     contributors: contributorData,
   };
+  await redis.set(cacheKey, health, 3600); // 1 hour cache
+  return health;
 }
 
 module.exports = {

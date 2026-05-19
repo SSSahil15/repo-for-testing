@@ -5,7 +5,7 @@ import {
   Loader2, GitBranch, Server, Box, TestTube,
   Star, GitFork, Clock, ExternalLink, Link2, Check
 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import MetricCard from "./MetricCard";
 import AICopilot from "./AICopilot";
 import ScoreGauge from "./ScoreGauge";
@@ -304,7 +304,8 @@ function AnalysisPanel({ analysisState, analysisResult, onAnalyze, repository, a
 
       {/* AI Analysis Job Queue Stepper */}
       {analysisState.status === "loading" && (
-        <div className="rounded-2xl p-5" style={{ background: "rgba(0,191,255,0.04)", boxShadow: "inset 0 0 0 1px rgba(0,191,255,0.15)" }}>
+        <div className="rounded-2xl p-5 relative overflow-hidden" style={{ background: "rgba(0,191,255,0.04)", boxShadow: "inset 0 0 0 1px rgba(0,191,255,0.15)" }}>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-400/20 to-transparent animate-scan-line pointer-events-none" />
           <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ background: "linear-gradient(90deg,#00BFFF,#FF6A00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AI Analysis In Progress</p>
           <div className="flex flex-col gap-2">
             {[
@@ -435,12 +436,12 @@ function AnalysisPanel({ analysisState, analysisResult, onAnalyze, repository, a
               </div>
               <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                     <XAxis dataKey="name" stroke="#ffffff40" fontSize={10} tickLine={false} axisLine={false} />
                     <YAxis domain={[0, 100]} stroke="#ffffff40" fontSize={10} tickLine={false} axisLine={false} width={30} />
                     <RechartsTooltip
-                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #ffffff20', borderRadius: '12px' }}
+                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #ffffff20', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
                       itemStyle={{ color: '#00BFFF', fontWeight: 'bold' }}
                       labelStyle={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}
                       formatter={(value, name, item) => [`${value}/100 (${item.payload.status || "N/A"})`, "Score"]}
@@ -451,17 +452,23 @@ function AnalysisPanel({ analysisState, analysisResult, onAnalyze, repository, a
                         <stop offset="0%" stopColor="#00BFFF" />
                         <stop offset="100%" stopColor="#FF6A00" />
                       </linearGradient>
+                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00BFFF" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#00BFFF" stopOpacity={0} />
+                      </linearGradient>
                     </defs>
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="score"
                       name="Score"
                       stroke="url(#lineGradient)"
                       strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#areaGradient)"
                       dot={{ r: 4, fill: "#00BFFF", strokeWidth: 0 }}
                       activeDot={{ r: 6, fill: '#fff', stroke: "#FF6A00", strokeWidth: 2 }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -470,7 +477,8 @@ function AnalysisPanel({ analysisState, analysisResult, onAnalyze, repository, a
 
         {/* Simulate progress stepper */}
         {simulateJobStatus && simulateJobStatus !== "done" && (
-          <div className="mb-6 bg-white/[0.02] ring-1 ring-white/[0.08] rounded-2xl p-5">
+          <div className="mb-6 bg-white/[0.02] ring-1 ring-white/[0.08] rounded-2xl p-5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent animate-scan-line pointer-events-none" />
             <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ background: "linear-gradient(90deg,#00BFFF,#FF6A00)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               {simulateJobStatus === "failed" ? "Scan Failed" : "CI/CD Scan In Progress"}
             </p>
@@ -519,20 +527,43 @@ function AnalysisPanel({ analysisState, analysisResult, onAnalyze, repository, a
               </div>
 
               {/* Security findings */}
-              <div className="bg-white/[0.03] ring-1 ring-white/10 rounded-2xl p-7 col-span-2">
+              <div className="bg-white/[0.03] ring-1 ring-white/10 rounded-2xl p-7 col-span-2 backdrop-blur-xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)] transition-shadow duration-300">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-5">Security Findings (Trivy Scan)</p>
-                <div className="grid grid-cols-4 gap-2 mb-6">
-                  {[
-                    { label: "Critical", value: sessionData.stages?.security?.critical, color: "text-red-400" },
-                    { label: "High",     value: sessionData.stages?.security?.high,     color: "text-orange-400" },
-                    { label: "Medium",   value: sessionData.stages?.security?.medium,   color: "text-amber-400" },
-                    { label: "Docker Image", value: sessionData.stages?.docker?.imageVulnerabilities, color: "text-blue-400" }
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="flex flex-col items-center bg-white/[0.04] ring-1 ring-white/5 rounded-xl p-3 gap-1 text-center">
-                      <span className={`text-xl font-black ${color}`}>{value ?? 0}</span>
-                      <span className="text-[9px] uppercase tracking-widest text-slate-600 font-bold">{label}</span>
-                    </div>
-                  ))}
+                <div className="flex flex-col md:flex-row gap-8 mb-6 items-center">
+                  <div className="w-40 h-40 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: "Critical", value: sessionData.stages?.security?.critical || 0, fill: "#f87171" },
+                            { name: "High",     value: sessionData.stages?.security?.high || 0, fill: "#fb923c" },
+                            { name: "Medium",   value: sessionData.stages?.security?.medium || 0, fill: "#fbbf24" },
+                            { name: "Docker",   value: sessionData.stages?.docker?.imageVulnerabilities || 0, fill: "#60a5fa" }
+                          ].filter(d => d.value > 0)}
+                          cx="50%" cy="50%" innerRadius={40} outerRadius={70}
+                          paddingAngle={3} dataKey="value" stroke="none"
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #ffffff20', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                          itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    {[
+                      { label: "Critical", value: sessionData.stages?.security?.critical, color: "text-red-400" },
+                      { label: "High",     value: sessionData.stages?.security?.high,     color: "text-orange-400" },
+                      { label: "Medium",   value: sessionData.stages?.security?.medium,   color: "text-amber-400" },
+                      { label: "Docker Image", value: sessionData.stages?.docker?.imageVulnerabilities, color: "text-blue-400" }
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="flex flex-col items-center bg-white/[0.04] ring-1 ring-white/5 rounded-xl p-4 gap-1 text-center transition-all hover:bg-white/[0.06]">
+                        <span className={`text-2xl font-black ${color}`}>{value ?? 0}</span>
+                        <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">{label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 {sessionData.stages?.security?.vulnerabilities?.length > 0 && (
                   <div className="border-t border-white/5 pt-5">

@@ -4,6 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { ApiError, apiRequest } from "../api";
 import AnalysisPanel from "../components/AnalysisPanel";
 import RepositoryCard from "../components/RepositoryCard";
+import { DashboardProvider } from "../context/DashboardContext";
+import { useDashboard } from "../hooks/useDashboard";
 
 function getInitials(user) {
   if (!user?.displayName && !user?.username) return "DP";
@@ -40,82 +42,23 @@ function ScanProgressIndicator({ status }) {
   );
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-function DashboardPage({ accessToken, onLogout, onSessionExpired, user }) {
-  const STORAGE_KEY = `devpulse_last_repo_${user?.id}`;
-
-  const [repositories, setRepositories] = useState([]);
-  const [repoState, setRepoState] = useState({ error: "", status: "loading" });
-  const [analysisState, setAnalysisState] = useState({ error: "", status: "idle", targetRepositoryId: null, jobStatus: null });
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [selectedRepositoryId, setSelectedRepositoryId] = useState(() => {
-    // Restore last selected repo from localStorage on page load / refresh
-    try {
-      const saved = localStorage.getItem(`devpulse_last_repo_${user?.id}`);
-      return saved ? parseInt(saved, 10) : null;
-    } catch { return null; }
-  });
-  const [searchTerm, setSearchTerm] = useState("");
-  const deferredSearch = useDeferredValue(searchTerm);
-  const [sidebarTab, setSidebarTab] = useState("repos");
-  const [sidebarHistory, setSidebarHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [selectedHistoryRecord, setSelectedHistoryRecord] = useState(null);
-  const [historySearch, setHistorySearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState(new Set()); // for bulk delete
-
-  // Clear AI analysis when switching repos so stale data never shows
-  useEffect(() => {
-    setAnalysisResult(null);
-    setAnalysisState({ error: "", status: "idle", targetRepositoryId: null, jobStatus: null });
-  }, [selectedRepositoryId]);
+// ─── Dashboard Content ────────────────────────────────────────────────────────
+function DashboardContent({ accessToken, onLogout, user }) {
+  const {
+    repoState,
+    analysisState,
+    analysisResult,
+    searchTerm, setSearchTerm,
+    sidebarTab, setSidebarTab,
+    sidebarHistory, historyLoading,
+    selectedHistoryRecord, setSelectedHistoryRecord,
+    historySearch, setHistorySearch,
+    selectedIds, setSelectedIds,
+    fetchSidebarHistory, deleteRecord, deleteSelected, toggleSelect,
+    handleAnalyze, filteredRepositories: filtered, selectedRepo
+  } = useDashboard();
 
 
-  // Fetch global scan history across all repositories
-  async function fetchSidebarHistory() {
-    setHistoryLoading(true);
-    setSelectedIds(new Set());
-    try {
-      const data = await apiRequest("/api/pipeline/results?limit=100", { accessToken });
-      setSidebarHistory(data.results || []);
-    } catch (err) {
-      console.error("Failed to refresh scan history", err);
-      if (err instanceof ApiError && err.status === 401) {
-        onSessionExpired("Session expired.");
-      }
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  // Delete a single record
-  async function deleteRecord(id) {
-    try {
-      await apiRequest(`/api/pipeline/results/${id}`, { accessToken, method: "DELETE" });
-      setSidebarHistory(prev => prev.filter(r => r.id !== id));
-      setSelectedIds(prev => { const s = new Set(prev); s.delete(id); return s; });
-    } catch (err) { console.error("Delete failed", err); }
-  }
-
-  // Bulk delete selected records
-  async function deleteSelected() {
-    if (selectedIds.size === 0) return;
-    const ids = [...selectedIds];
-    try {
-      await apiRequest(`/api/pipeline/results`, { accessToken, method: "DELETE", body: JSON.stringify({ ids }) });
-      setSidebarHistory(prev => prev.filter(r => !ids.includes(r.id)));
-      setSelectedIds(new Set());
-    } catch (err) { console.error("Bulk delete failed", err); }
-  }
-
-  // Toggle individual record selection
-  function toggleSelect(id) {
-    setSelectedIds(prev => {
-      const s = new Set(prev);
-      s.has(id) ? s.delete(id) : s.add(id);
-      return s;
-    });
-  }
 
   // PDF generator — matches SharedReportPage visual format
   function downloadPDF(record) {
@@ -232,68 +175,7 @@ ${record.insights?'<div class="section"><div class="section-label">💡 AI Insig
   }
 
 
-  // Persist selected repo whenever it changes
-  useEffect(() => {
-    try {
-      if (selectedRepositoryId) {
-        localStorage.setItem(STORAGE_KEY, String(selectedRepositoryId));
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    } catch {}
-  }, [selectedRepositoryId, STORAGE_KEY]);
 
-  useEffect(() => {
-    let live = true;
-    async function load() {
-      setRepoState({ error: "", status: "loading" });
-      try {
-        const data = await apiRequest("/repos", { accessToken });
-        if (!live) return;
-        setRepositories(data.repositories);
-        setRepoState({ error: "", status: "success" });
-        if (data.repositories.length > 0) setSelectedRepositoryId(c => c || data.repositories[0].id);
-      } catch (err) {
-        if (!live) return;
-        if (err instanceof ApiError && err.status === 401) { onSessionExpired("Session expired."); return; }
-        setRepoState({ error: err.message, status: "error" });
-      }
-    }
-    load();
-    return () => { live = false; };
-  }, [accessToken, onSessionExpired, user.id]);
-
-  const filtered = repositories.filter(r => {
-    const hay = `${r.name} ${r.fullName} ${r.language || ""} ${r.description || ""}`.toLowerCase();
-    return hay.includes(deferredSearch.trim().toLowerCase());
-  });
-
-  const selectedRepo = repositories.find(r => r.id === selectedRepositoryId) || null;
-
-  useEffect(() => {
-    fetchSidebarHistory();
-  }, [accessToken]);
-
-  async function handleAnalyze(repo) {
-    setAnalysisState({ error: "", status: "loading", targetRepositoryId: repo.id, jobStatus: null });
-    setSelectedRepositoryId(repo.id);
-
-    try {
-      // Only calls Python FastAPI AI service — fast (~1-2s)
-      // CI/CD pipeline simulation is separate via the "Simulate CI/CD" button
-      const data = await apiRequest("/analyze", {
-        accessToken,
-        method: "POST",
-        body: JSON.stringify({ repositoryFullName: repo.fullName }),
-      });
-
-      setAnalysisResult(data);
-      setAnalysisState({ error: "", status: "success", targetRepositoryId: repo.id, jobStatus: null });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) { onSessionExpired("Session expired."); return; }
-      setAnalysisState({ error: err.message, status: "error", targetRepositoryId: repo.id, jobStatus: null });
-    }
-  }
 
 
   // ─── Logout: clear server-side token then local storage ──────────────────
@@ -532,11 +414,11 @@ ${record.insights?'<div class="section"><div class="section-label">💡 AI Insig
         );
       })()}
 
-      {/* Background */}
-
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-60 -right-60 w-[700px] h-[700px] bg-blue-600/5 rounded-full blur-[140px]" />
-        <div className="absolute -bottom-60 -left-40 w-[500px] h-[500px] bg-indigo-700/5 rounded-full blur-[120px]" />
+      {/* Background with deeper ambient glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-900/10 via-[#080b14] to-[#080b14]">
+        <div className="absolute -top-60 -right-60 w-[800px] h-[800px] bg-blue-600/10 rounded-full blur-[160px] animate-pulse-glow" />
+        <div className="absolute -bottom-60 -left-40 w-[600px] h-[600px] bg-orange-600/5 rounded-full blur-[140px] animate-pulse-glow" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-[150px] animate-breathe" />
       </div>
 
       {/* Sidebar */}
@@ -563,10 +445,13 @@ ${record.insights?'<div class="section"><div class="section-label">💡 AI Insig
         </div>
 
         {/* Sidebar Tab Bar */}
-        <div className="flex border-b border-white/[0.06]">
+        <nav aria-label="Sidebar navigation" className="flex border-b border-white/[0.06]">
           {[{ id: "repos", label: "Repos", icon: null }, { id: "history", label: "History", icon: History }].map(tab => (
             <button
               key={tab.id}
+              aria-label={`View ${tab.label}`}
+              aria-current={sidebarTab === tab.id ? "page" : undefined}
+              tabIndex={0}
               onClick={() => { setSidebarTab(tab.id); if (tab.id === "history") fetchSidebarHistory(); }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all ${
                 sidebarTab === tab.id
@@ -575,12 +460,12 @@ ${record.insights?'<div class="section"><div class="section-label">💡 AI Insig
               }`}
               style={sidebarTab === tab.id ? { borderImage: "linear-gradient(90deg,#00BFFF,#FF6A00) 1", color: "#00BFFF" } : {}}
             >
-              {tab.icon && <tab.icon className="w-3 h-3" />}
+              {tab.icon && <tab.icon className="w-3 h-3" aria-hidden="true" />}
               {tab.label}
-              {tab.id === "repos" && <span className="ml-1 text-[9px] bg-white/5 px-1.5 py-0.5 rounded-full">{repositories.length}</span>}
+              {tab.id === "repos" && <span className="ml-1 text-[9px] bg-white/5 px-1.5 py-0.5 rounded-full">{filtered.length}</span>}
             </button>
           ))}
-        </div>
+        </nav>
 
         {/* Tab: Repositories */}
         {sidebarTab === "repos" && (
@@ -881,4 +766,10 @@ ${record.insights?'<div class="section"><div class="section-label">💡 AI Insig
   );
 }
 
-export default DashboardPage;
+export default function DashboardPage({ accessToken, onLogout, onSessionExpired, user }) {
+  return (
+    <DashboardProvider accessToken={accessToken} user={user} onSessionExpired={onSessionExpired}>
+      <DashboardContent accessToken={accessToken} onLogout={onLogout} user={user} />
+    </DashboardProvider>
+  );
+}

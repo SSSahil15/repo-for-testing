@@ -30,9 +30,13 @@ jobs:
 
   # ─── Stage 1: Backend ──────────────────────────────────────
   backend:
-    name: "🔧 Backend · Build & Test"
+    name: "🔧 Backend · Build & Test (Node ${{ matrix.node }})"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+      fail-fast: false
     defaults:
       run:
         working-directory: backend
@@ -44,7 +48,7 @@ jobs:
       - name: "⚙️ Setup Node.js"
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -57,12 +61,11 @@ jobs:
           echo "dep_count=$(ls node_modules | wc -l | tr -d ' ')" >> $GITHUB_OUTPUT
         id: install
 
-      - name: "🧪 Run tests"
+      - name: "🧪 Run tests with coverage"
         id: backend_tests
-        # Tests are self-contained and don't require env vars
         run: |
           set +e
-          npm test 2>&1 | tee ${{ github.workspace }}/logs/backend-tests.log
+          npm run test:coverage 2>&1 | tee ${{ github.workspace }}/logs/backend-tests.log
           TEST_EXIT=$?
           if [ $TEST_EXIT -ne 0 ]; then
             echo "result=failure" >> $GITHUB_OUTPUT
@@ -75,7 +78,7 @@ jobs:
       - name: "📋 Test summary"
         if: always()
         run: |
-          echo "### 🧪 Backend Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Backend Test Results (Node ${{ matrix.node }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.backend_tests.outputs.result }}" = "success" ]; then
             echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
@@ -89,8 +92,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-logs
+          name: backend-logs-node-${{ matrix.node }}
           path: ${{ github.workspace }}/logs/
+          retention-days: 14
+
+      - name: "📤 Upload coverage report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-node-${{ matrix.node }}
+          path: backend/coverage/
           retention-days: 14
 
     outputs:
@@ -98,9 +109,13 @@ jobs:
 
   # ─── Stage 2: Frontend ────────────────────────────────────
   frontend:
-    name: "🎨 Frontend · Build & Test"
+    name: "🎨 Frontend · Build & Test (Node ${{ matrix.node }})"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+      fail-fast: false
     defaults:
       run:
         working-directory: frontend
@@ -112,7 +127,7 @@ jobs:
       - name: "⚙️ Setup Node.js"
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -139,11 +154,11 @@ jobs:
           fi
           exit 0
 
-      - name: "🧪 Run tests"
+      - name: "🧪 Run tests with coverage"
         id: frontend_tests
         run: |
           set +e
-          npm test 2>&1 | tee ${{ github.workspace }}/logs/frontend-tests.log
+          npm run test:coverage 2>&1 | tee ${{ github.workspace }}/logs/frontend-tests.log
           TEST_EXIT=$?
           if [ $TEST_EXIT -ne 0 ]; then
             echo "result=failure" >> $GITHUB_OUTPUT
@@ -155,7 +170,7 @@ jobs:
       - name: "📋 Build summary"
         if: always()
         run: |
-          echo "### 🎨 Frontend Results" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎨 Frontend Results (Node ${{ matrix.node }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -167,29 +182,74 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-logs
+          name: frontend-logs-node-${{ matrix.node }}
           path: ${{ github.workspace }}/logs/
           retention-days: 14
 
       - name: "📤 Upload build output"
-        if: steps.frontend_build.outputs.result == 'success'
+        if: steps.frontend_build.outputs.result == 'success' && matrix.node == 20
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: frontend/dist/
           retention-days: 7
 
+      - name: "📤 Upload coverage report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-node-${{ matrix.node }}
+          path: frontend/coverage/
+          retention-days: 14
+
     outputs:
       build_result: ${{ steps.frontend_build.outputs.result }}
       test_result: ${{ steps.frontend_tests.outputs.result }}
 
-  # ─── Stage 3: Security Scan ───────────────────────────────
+  # ─── Stage 3: Playwright E2E Tests ───────────────────────
+  e2e:
+    name: "🎭 E2E · Playwright Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend, frontend]
+    
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: "📦 Install Root and Service Dependencies"
+        run: |
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: "🎭 Install Playwright Browsers"
+        run: npx playwright install --with-deps
+
+      - name: "🎭 Run Playwright E2E Tests"
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: "📤 Upload Playwright Report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  # ─── Stage 4: Security Scan ───────────────────────────────
   security:
     name: "🛡️ Security · Trivy Scan"
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Run in parallel with build stages — no dependency needed
-    # Trivy scans the raw source, not build output
 
     steps:
       - name: "📥 Checkout"
@@ -198,7 +258,7 @@ jobs:
       - name: "📁 Prepare reports"
         run: mkdir -p security-reports
 
-      - name: "🛡️ Trivy filesystem scan"
+      - name: "🛡️ Trivy filesystem scan (Vulns, Secrets, Config)"
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -206,6 +266,7 @@ jobs:
           format: json
           output: security-reports/trivy-fs-results.json
           severity: CRITICAL,HIGH,MEDIUM
+          scanners: vuln,secret,config
         continue-on-error: true
 
       - name: "📊 Parse vulnerability counts"
@@ -322,7 +383,7 @@ jobs:
       total: ${{ steps.vuln_count.outputs.total }}
       vuln_details: ${{ steps.vuln_count.outputs.vuln_details }}
 
-  # ─── Stage 4: Docker ──────────────────────────────────────
+  # ─── Stage 5: Docker ──────────────────────────────────────
   docker:
     name: "🐳 Docker · Build & Scan"
     runs-on: ubuntu-latest
@@ -419,15 +480,18 @@ jobs:
       image_size: ${{ steps.docker_build.outputs.image_size }}
       docker_vulns: ${{ steps.docker_vulns.outputs.count }}
 
-  # ─── Stage 5: Report Results ──────────────────────────────
+  # ─── Stage 6: Report Results ──────────────────────────────
   report:
     name: "📡 Report · Send to DevPulse API"
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [backend, frontend, security, docker]
+    needs: [backend, frontend, security, docker, e2e]
     if: always()
 
     steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+
       - name: "📡 Build and send pipeline report"
         run: |
           # Determine overall status
@@ -435,8 +499,9 @@ jobs:
           FRONTEND="${{ needs.frontend.result }}"
           SECURITY="${{ needs.security.result }}"
           DOCKER="${{ needs.docker.result }}"
+          E2E="${{ needs.e2e.result }}"
 
-          if [ "$BACKEND" = "success" ] && [ "$FRONTEND" = "success" ] && [ "$SECURITY" = "success" ] && [ "$DOCKER" = "success" ]; then
+          if [ "$BACKEND" = "success" ] && [ "$FRONTEND" = "success" ] && [ "$SECURITY" = "success" ] && [ "$DOCKER" = "success" ] && [ "$E2E" = "success" ]; then
             OVERALL="success"
           else
             OVERALL="failure"
@@ -464,11 +529,11 @@ jobs:
             "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
             "stages": {
               "backend": {
-                "tests": "${{ needs.backend.outputs.test_result || 'skipped' }}"
+                "tests": "$BACKEND"
               },
               "frontend": {
-                "build": "${{ needs.frontend.outputs.build_result || 'skipped' }}",
-                "tests": "${{ needs.frontend.outputs.test_result || 'skipped' }}"
+                "build": "$FRONTEND",
+                "tests": "$FRONTEND"
               },
               "security": {
                 "critical": ${{ needs.security.outputs.vuln_critical || 0 }},
@@ -521,19 +586,20 @@ jobs:
         run: |
           echo "### 📡 Pipeline Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Job Status | Detail |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend | ${{ needs.backend.result == 'success' && '✅' || '❌' }} | Tests: ${{ needs.backend.outputs.test_result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend | ${{ needs.frontend.result == 'success' && '✅' || '❌' }} | Build: ${{ needs.frontend.outputs.build_result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.security.result == 'success' && '✅' || '❌' }} | Vulns: ${{ needs.security.outputs.total || 0 }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker | ${{ needs.docker.result == 'success' && '✅' || '❌' }} | Size: ${{ needs.docker.outputs.image_size || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Job Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ needs.backend.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ needs.frontend.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| E2E Playwright | ${{ needs.e2e.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
-  # ─── Stage 6: Deploy Gate ─────────────────────────────────
+  # ─── Stage 7: Deploy Gate ─────────────────────────────────
   deploy:
     name: "🚀 Deploy · Quality Gate"
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [backend, frontend, security, docker]
+    needs: [backend, frontend, security, docker, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -550,8 +616,9 @@ jobs:
           REASONS=""
 
           # ─── Check each gate ───
-          BACKEND_TESTS="${{ needs.backend.outputs.test_result }}"
-          FRONTEND_BUILD="${{ needs.frontend.outputs.build_result }}"
+          BACKEND_TESTS="${{ needs.backend.result }}"
+          FRONTEND_BUILD="${{ needs.frontend.result }}"
+          E2E_TESTS="${{ needs.e2e.result }}"
           CRITICAL_VULNS=${{ needs.security.outputs.vuln_critical || 0 }}
           DOCKER_BUILD="${{ needs.docker.outputs.build_result }}"
 
@@ -573,6 +640,14 @@ jobs:
             printf "  │ %-18s │ %-15s │\n" "Frontend Build" "❌ Failed"
             PASS=false
             REASONS="$REASONS\n  • Frontend build failed"
+          fi
+
+          if [ "$E2E_TESTS" = "success" ]; then
+            printf "  │ %-18s │ %-15s │\n" "E2E Playwright" "✅ Passed"
+          else
+            printf "  │ %-18s │ %-15s │\n" "E2E Playwright" "❌ Failed"
+            PASS=false
+            REASONS="$REASONS\n  • E2E Playwright tests failed"
           fi
 
           if [ "$CRITICAL_VULNS" -eq 0 ]; then

@@ -5,7 +5,22 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from services.predictor import FailurePredictor
 
-app = FastAPI(title="DevPulse AI Service")
+from contextlib import asynccontextmanager
+import asyncio
+import signal
+
+startup_complete = False
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global startup_complete
+    # Simulate loading model weights or initialization
+    startup_complete = True
+    print("[AI Service] Startup complete, ready to accept requests.")
+    yield
+    print("[AI Service] Shutting down gracefully...")
+
+app = FastAPI(title="DevPulse AI Service", lifespan=lifespan)
 predictor = FailurePredictor()
 
 class RepositoryMetadata(BaseModel):
@@ -49,11 +64,22 @@ class AnalysisResponse(BaseModel):
     generatedAt: str
     source: str
 
-@app.get("/health")
-async def health():
+@app.get("/health/startup")
+async def health_startup():
+    if startup_complete:
+        return {"status": "started"}
+    raise HTTPException(status_code=503, detail="starting")
+
+@app.get("/health/live")
+async def health_live():
+    return {"status": "alive", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/health/ready")
+async def health_ready():
+    # Model is loaded in predictor by default
     return {
-        "service": "devpulse-ai",
-        "status": "ok",
+        "status": "ready",
+        "checks": {"model": "ok"},
         "timestamp": datetime.utcnow().isoformat()
     }
 

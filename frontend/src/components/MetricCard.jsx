@@ -1,16 +1,16 @@
 import { Info } from "lucide-react";
 
 const toneMap = {
-  danger:  { ring: "ring-red-500/30 bg-red-500/5",    text: "text-red-400",    glow: "bg-red-500/20" },
-  warning: { ring: "ring-amber-500/30 bg-amber-500/5", text: "text-amber-400",  glow: "bg-amber-500/20" },
-  success: { ring: "ring-emerald-500/30 bg-emerald-500/5", text: "text-emerald-400", glow: "bg-emerald-500/20" },
-  neutral: { ring: "ring-white/10 bg-white/[0.04]",   text: "text-slate-300",  glow: "bg-slate-500/10" },
+  danger:  { ring: "ring-red-500/30 bg-red-500/[0.02]",    text: "text-red-400",    glow: "bg-red-500/20", shadow: "shadow-[inset_0_1px_0_rgba(239,68,68,0.2)]" },
+  warning: { ring: "ring-amber-500/30 bg-amber-500/[0.02]", text: "text-amber-400",  glow: "bg-amber-500/20", shadow: "shadow-[inset_0_1px_0_rgba(245,158,11,0.2)]" },
+  success: { ring: "ring-emerald-500/30 bg-emerald-500/[0.02]", text: "text-emerald-400", glow: "bg-emerald-500/20", shadow: "shadow-[inset_0_1px_0_rgba(16,185,129,0.2)]" },
+  neutral: { ring: "ring-white/10 bg-white/[0.02]",   text: "text-slate-300",  glow: "bg-blue-500/10", shadow: "shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]" },
 };
 
 function MetricCard({ eyebrow, value, detail, tone = "neutral" }) {
   const t = toneMap[tone] || toneMap.neutral;
   return (
-    <div className={`relative overflow-hidden rounded-2xl ring-1 p-6 ${t.ring}`}>
+    <div className={`relative overflow-hidden rounded-2xl ring-1 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)] ${t.ring} ${t.shadow}`}>
       <div className="relative z-10 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{eyebrow}</span>

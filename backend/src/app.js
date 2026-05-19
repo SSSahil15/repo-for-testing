@@ -5,8 +5,16 @@ const morgan = require("morgan");
 const { exec } = require("child_process");
 const util = require("util");
 const execPromise = util.promisify(exec);
+const Sentry = require("@sentry/node");
 
 const config = require("./config/env");
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "https://dummy@o0.ingest.sentry.io/0",
+  tracesSampleRate: 1.0,
+  environment: config.isProduction ? "production" : "development"
+});
+
 const analyzeRoutes = require("./routes/analyze.routes");
 const authRoutes = require("./routes/auth.routes");
 const repoRoutes = require("./routes/repo.routes");
@@ -18,6 +26,23 @@ const aiChatRoutes = require("./routes/aiChat.routes");
 const { generalApiLimiter, authLimiter } = require("./middleware/rateLimiter");
 
 const app = express();
+
+const logger = require("./utils/logger");
+
+// ─── Swagger Documentation ────────────────────────────────────────────────────
+if (!config.isProduction) {
+  const swaggerUi = require("swagger-ui-express");
+  const YAML = require("yamljs");
+  const path = require("path");
+  
+  try {
+    const swaggerDocument = YAML.load(path.join(__dirname, "../docs/openapi.yaml"));
+    app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+    logger.info("[Swagger] API documentation available at /api-docs");
+  } catch (error) {
+    logger.warn(`[Swagger] Could not load openapi.yaml: ${error.message}`);
+  }
+}
 
 // ─── Trust Proxy (required for express-rate-limit behind Render/Vercel) ───────
 app.set("trust proxy", 1);
@@ -42,7 +67,23 @@ app.use(
   })
 );
 
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https://avatars.githubusercontent.com"],
+      connectSrc: ["'self'", config.frontendUrl, config.aiServiceUrl],
+    }
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  }
+}));
 app.use(morgan(config.isProduction ? "combined" : "dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -58,12 +99,12 @@ async function checkToolAvailability() {
     execPromise("trivy --version")
       .then(() => { toolStatus.trivy = true; })
       .catch(() => {
-        console.warn("[Startup] ⚠️  'trivy' not found — security scans will return empty results.");
+        logger.warn("[Startup] ⚠️  'trivy' not found — security scans will return empty results.");
       }),
     execPromise("git --version")
       .then(() => { toolStatus.git = true; })
       .catch(() => {
-        console.warn("[Startup] ⚠️  'git' not found — repository cloning will fail.");
+        logger.warn("[Startup] ⚠️  'git' not found — repository cloning will fail.");
       }),
   ];
   await Promise.all(checks);
@@ -71,17 +112,47 @@ async function checkToolAvailability() {
 
 checkToolAvailability();
 
-// ─── Health ───────────────────────────────────────────────────────────────────
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    service: "devpulse-backend",
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    tools: {
-      trivy: toolStatus.trivy ? "available" : "missing",
-      git: toolStatus.git ? "available" : "missing",
-    },
-  });
+// ─── Health Checks ──────────────────────────────────────────────────────────────
+let startupComplete = false;
+app.get("/health/startup", (req, res) => {
+  if (startupComplete) {
+    res.status(200).json({ status: "started" });
+  } else {
+    res.status(503).json({ status: "starting" });
+  }
+});
+
+// We'll simulate setting startup to true once app loads
+setTimeout(() => { startupComplete = true; }, 1000);
+
+app.get("/health/live", (req, res) => {
+  res.status(200).json({ status: "alive", timestamp: new Date().toISOString() });
+});
+
+app.get("/health/ready", (req, res) => {
+  try {
+    const isDbReady = require("./db/database").db.open;
+    const isGroqConfigured = !!config.groqApiKey;
+
+    if (isDbReady && isGroqConfigured) {
+      res.status(200).json({
+        status: "ready",
+        checks: { database: "ok", groq: "ok", tools: toolStatus },
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(503).json({
+        status: "unavailable",
+        checks: {
+          database: isDbReady ? "ok" : "down",
+          groq: isGroqConfigured ? "ok" : "down"
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    res.status(503).json({ status: "error", error: error.message });
+  }
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -102,6 +173,8 @@ app.use((req, res) => {
 });
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
+Sentry.setupExpressErrorHandler(app);
+
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
 

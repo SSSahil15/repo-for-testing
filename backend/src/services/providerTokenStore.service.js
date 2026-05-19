@@ -1,5 +1,7 @@
+const crypto = require("crypto");
 const { providerTokenDB } = require("../db/database");
 const { decryptText, encryptText } = require("../utils/crypto");
+const redis = require("./redis.service");
 
 /**
  * Provider Token Store — SQLite-backed
@@ -12,7 +14,7 @@ async function saveGitHubProviderToken({ githubViewer, providerToken, userId }) 
   try {
     const encrypted = encryptText(providerToken);
     console.log("[TokenStore] Token encrypted successfully");
-    providerTokenDB.upsert({
+    await providerTokenDB.upsert({
       userId,
       encryptedToken: encrypted,
       githubLogin: githubViewer.login,
@@ -27,7 +29,7 @@ async function saveGitHubProviderToken({ githubViewer, providerToken, userId }) 
 
 async function getGitHubProviderToken(userId) {
   console.log("[TokenStore] Retrieving GitHub token for user:", userId);
-  const record = providerTokenDB.getByUserId(userId);
+  const record = await providerTokenDB.getByUserId(userId);
   
   if (!record) {
     console.warn("[TokenStore] ⚠ No token record found for user:", userId);
@@ -47,12 +49,22 @@ async function getGitHubProviderToken(userId) {
 }
 
 async function getGitHubProviderTokenStatus(userId) {
-  const record = providerTokenDB.getByUserId(userId);
+  const record = await providerTokenDB.getByUserId(userId);
   return Boolean(record?.encrypted_token);
 }
 
 async function deleteGitHubProviderToken(userId) {
-  providerTokenDB.deleteByUserId(userId);
+  try {
+    const token = await getGitHubProviderToken(userId);
+    if (token) {
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      await redis.del(`user:repos:${tokenHash}`);
+      console.log(`[TokenStore] Cleared cached repos for user: ${userId}`);
+    }
+  } catch (err) {
+    console.error("[TokenStore] Failed to clear cached repos during token deletion:", err.message);
+  }
+  await providerTokenDB.deleteByUserId(userId);
 }
 
 module.exports = {

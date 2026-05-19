@@ -12,6 +12,8 @@ const envSchema = z.object({
     .string()
     .min(32, "TOKEN_ENCRYPTION_SECRET must be at least 32 characters long."),
   DATABASE_PATH: z.string().min(1).default("./.data/devpulse.db"),
+  DATABASE_URL: z.string().optional(),
+  REDIS_URL: z.string().optional(),
   GITHUB_REPO_PAGE_LIMIT: z.coerce.number().int().positive().max(50).default(10),
   AI_SERVICE_URL: z.string().url().default("http://localhost:8000"),
   GITHUB_CLIENT_ID: z.string().min(1, "GITHUB_CLIENT_ID is required."),
@@ -49,6 +51,8 @@ console.log("[Config] ✓ Environment loaded successfully");
 console.log("[Config]   NODE_ENV:", env.NODE_ENV);
 console.log("[Config]   PORT:", env.PORT);
 console.log("[Config]   DATABASE_PATH:", env.DATABASE_PATH);
+console.log("[Config]   DATABASE_URL:", env.DATABASE_URL || "not set");
+console.log("[Config]   REDIS_URL:", env.REDIS_URL || "not set");
 console.log("[Config]   BACKEND_URL:", env.BACKEND_URL);
 console.log("[Config]   FRONTEND_URL:", env.FRONTEND_URL);
 console.log("[Config]   AI_SERVICE_URL:", env.AI_SERVICE_URL);
@@ -60,6 +64,8 @@ module.exports = {
   githubClientId: env.GITHUB_CLIENT_ID,
   githubClientSecret: env.GITHUB_CLIENT_SECRET,
   databasePath: env.DATABASE_PATH,
+  databaseUrl: env.DATABASE_URL,
+  redisUrl: env.REDIS_URL,
   githubRepoPageLimit: env.GITHUB_REPO_PAGE_LIMIT,
   isProduction: env.NODE_ENV === "production",
   jwtSecret: env.JWT_SECRET,

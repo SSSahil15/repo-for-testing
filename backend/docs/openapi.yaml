@@ -1,0 +1,137 @@
+openapi: 3.0.0
+info:
+  title: DevPulse API
+  description: API for the DevPulse platform covering authentication, repository analysis, and AI Copilot integrations.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:4000
+    description: Local development server
+  - url: https://devpulse-backend.onrender.com
+    description: Production server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/github:
+    get:
+      summary: Initiate GitHub OAuth
+      description: Redirects the user to the GitHub authorization page.
+      security: []
+      responses:
+        '302':
+          description: Redirect to GitHub.
+
+  /auth/github/callback:
+    get:
+      summary: GitHub OAuth Callback
+      description: Handles the callback from GitHub, exchanges code for token, and redirects back to the frontend with a DevPulse JWT.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirects to frontend with JWT token in query parameter.
+
+  /auth/me:
+    get:
+      summary: Get Current User
+      description: Returns the authenticated user's profile and GitHub token sync status.
+      responses:
+        '200':
+          description: User info retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                  githubTokenSynced:
+                    type: boolean
+                  user:
+                    type: object
+        '401':
+          description: Unauthorized.
+
+  /api/repos:
+    get:
+      summary: List Repositories
+      description: Fetches a list of the user's GitHub repositories.
+      responses:
+        '200':
+          description: List of repositories.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  repositories:
+                    type: array
+                    items:
+                      type: object
+
+  /api/repos/analyze:
+    post:
+      summary: Analyze Repository
+      description: Triggers a security and quality scan on a specified repository.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - repository
+              properties:
+                repository:
+                  type: string
+                  example: SSSahil15/DevPulse
+                branch:
+                  type: string
+                  example: main
+      responses:
+        '202':
+          description: Scan job created.
+
+  /api/pipeline/results:
+    get:
+      summary: List Pipeline Results
+      description: Returns historical analysis results.
+      responses:
+        '200':
+          description: A list of pipeline results.
+
+  /api/ai/ask:
+    post:
+      summary: Ask AI Copilot
+      description: Submit a natural language query to the AI Copilot regarding codebase health.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  example: "How do I fix the SQL injection vulnerability?"
+                contextData:
+                  type: object
+      responses:
+        '200':
+          description: AI response returned.

@@ -6,6 +6,7 @@ const ensureGitHubTokenSynced = require("../middleware/ensureGitHubTokenSynced")
 const { createReport, getReportByToken } = require("../services/report.service");
 const { pipelineDB } = require("../db/database");
 const config = require("../config/env");
+const redis = require("../services/redis.service");
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ router.post(
     const { repository, repoMeta } = parsed.data;
 
     // Find latest pipeline data for this repo from DB
-    const results = pipelineDB.findFiltered({ repository, limit: 1 });
+    const results = await pipelineDB.findFiltered({ repository, limit: 1 });
     const latest = results[0];
 
     if (!latest) {
@@ -51,7 +52,7 @@ router.post(
       });
     }
 
-    const report = createReport({
+    const report = await createReport({
       repository,
       repoMeta: repoMeta || {},
       devpulseScore: latest.devpulseScore,
@@ -83,7 +84,17 @@ router.get(
       return res.status(400).json({ message: "Invalid report token format." });
     }
 
-    const report = getReportByToken(token);
+    const cacheKey = `report:${token}`;
+    let report = await redis.get(cacheKey);
+    
+    if (report) {
+      console.log(`[Reports] Cache HIT for shared report token: ${token}`);
+    } else {
+      report = await getReportByToken(token);
+      if (report && !report.expired) {
+        await redis.set(cacheKey, report, 30 * 24 * 60 * 60); // 30 days
+      }
+    }
 
     if (!report) {
       return res.status(404).json({ message: "Report not found or the link is invalid." });

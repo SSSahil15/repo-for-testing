@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { scanJobDB, pipelineDB } = require("../db/database");
 const { runTrivyScan } = require("./security.service");
 const { fetchRepoHealth } = require("./github.service");
+const redis = require("./redis.service");
 const {
   calculateDevPulseScore,
   generatePipelineInsights,
@@ -24,14 +25,14 @@ function generateJobId() {
  * Creates a pending scan job in DB and fires off the background worker.
  * Returns the jobId immediately — does NOT await the scan.
  */
-function createAndDispatchJob(repositoryFullName, githubAccessToken) {
+async function createAndDispatchJob(repositoryFullName, githubAccessToken) {
   const jobId = generateJobId();
-  scanJobDB.create(jobId, repositoryFullName);
+  await scanJobDB.create(jobId, repositoryFullName);
 
   // Fire and forget — run in background
-  _processJob(jobId, repositoryFullName, githubAccessToken).catch((err) => {
+  _processJob(jobId, repositoryFullName, githubAccessToken).catch(async (err) => {
     console.error(`[ScanJob] Unhandled error in job ${jobId}:`, err.message);
-    scanJobDB.markFailed(jobId, err.message);
+    await scanJobDB.markFailed(jobId, err.message);
   });
 
   return jobId;
@@ -41,7 +42,11 @@ function createAndDispatchJob(repositoryFullName, githubAccessToken) {
  * Background worker — runs the full pipeline simulation for a job.
  */
 async function _processJob(jobId, repositoryFullName, githubAccessToken) {
-  scanJobDB.markProcessing(jobId);
+  await scanJobDB.markProcessing(jobId);
+
+  // Invalidate cached repository data so next request fetches fresh simulation results
+  await redis.del(`repo:${repositoryFullName}`);
+  await redis.del(`repo:health:${repositoryFullName}`);
 
   try {
     // Run real Trivy scan + GitHub health metrics in parallel
@@ -71,7 +76,7 @@ async function _processJob(jobId, repositoryFullName, githubAccessToken) {
     const overallStatus = stages.security.critical > 0 ? "failure" : "success";
 
     // Pull repo's existing history for failure-rate factor
-    const repoHistory = pipelineDB.findFiltered({ repository: repositoryFullName, limit: 50 });
+    const repoHistory = await pipelineDB.findFiltered({ repository: repositoryFullName, limit: 50 });
     const devpulseScore = calculateDevPulseScore(stages, repoHealth, repoHistory);
     const insights = generatePipelineInsights(stages, devpulseScore, repoHealth);
 
@@ -93,21 +98,21 @@ async function _processJob(jobId, repositoryFullName, githubAccessToken) {
       insights,
     };
 
-    pipelineDB.insert(record);
-    scanJobDB.markDone(jobId, { record });
+    await pipelineDB.insert(record);
+    await scanJobDB.markDone(jobId, { record });
 
     console.log(`[ScanJob] ${jobId} completed — score: ${devpulseScore.score} (${devpulseScore.status})`);
   } catch (err) {
     console.error(`[ScanJob] ${jobId} failed:`, err.message);
-    scanJobDB.markFailed(jobId, err.message);
+    await scanJobDB.markFailed(jobId, err.message);
   }
 }
 
 /**
  * Returns the current status of a scan job.
  */
-function getJobStatus(jobId) {
-  return scanJobDB.getById(jobId);
+async function getJobStatus(jobId) {
+  return await scanJobDB.getById(jobId);
 }
 
 module.exports = { createAndDispatchJob, getJobStatus };

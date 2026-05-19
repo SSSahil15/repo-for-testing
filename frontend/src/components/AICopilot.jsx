@@ -190,17 +190,21 @@ export default function AICopilot({ pipelineData, analysisResult, accessToken })
   return (
     <>
       {/* Floating Action Button — brand gradient with glow */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-8 right-8 w-14 h-14 text-white rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-95 z-50 ring-4 ring-[#080b14]"
-        style={{ background: BRAND_GRAD, boxShadow: BRAND_GLOW }}
-      >
-        <Sparkles className="w-6 h-6" />
-      </button>
+      <div className="fixed bottom-8 right-8 z-50">
+        <div className="absolute inset-0 rounded-full animate-ping opacity-30" style={{ background: BRAND_GRAD }}></div>
+        <div className="absolute inset-0 rounded-full animate-pulse-glow opacity-50" style={{ background: BRAND_GRAD, filter: "blur(12px)" }}></div>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="relative w-14 h-14 text-white rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-95 ring-4 ring-[#080b14]"
+          style={{ background: BRAND_GRAD, boxShadow: BRAND_GLOW }}
+        >
+          <Sparkles className="w-6 h-6" />
+        </button>
+      </div>
 
       {/* Floating Chat Panel */}
-      <div className={`fixed bottom-28 right-8 w-[400px] h-[600px] max-h-[80vh] bg-[#0c101d] ring-1 ring-white/10 rounded-2xl flex flex-col shadow-2xl transition-all origin-bottom-right z-50 ${
-        isOpen ? "scale-100 opacity-100 pointer-events-auto" : "scale-90 opacity-0 pointer-events-none"
+      <div className={`fixed bottom-28 right-8 w-[400px] h-[600px] max-h-[80vh] bg-[#0c101d]/85 backdrop-blur-3xl ring-1 ring-white/10 rounded-3xl flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all origin-bottom-right z-50 ${
+        isOpen ? "scale-100 opacity-100 pointer-events-auto shadow-[0_0_40px_rgba(0,191,255,0.15)]" : "scale-90 opacity-0 pointer-events-none"
       }`}>
         {/* Header */}
         <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02] shrink-0">

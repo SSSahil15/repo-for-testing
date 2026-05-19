@@ -4,12 +4,14 @@ function RepositoryCard({ isAnalyzing, isSelected, onAnalyze, onSelect, reposito
   return (
     <button
       onClick={() => onSelect(repository)}
-      className={`w-full text-left p-4 rounded-xl transition-all duration-150 relative group ${
+      className={`w-full text-left p-4 rounded-xl transition-all duration-300 relative group overflow-hidden ${
         isSelected
-          ? "bg-blue-600/10 ring-1 ring-blue-500/30"
-          : "hover:bg-white/[0.04] ring-1 ring-transparent hover:ring-white/10"
+          ? "bg-blue-600/10 ring-1 ring-blue-500/40 shadow-[inset_0_1px_0_rgba(59,130,246,0.2)]"
+          : "bg-transparent hover:bg-white/[0.03] ring-1 ring-transparent hover:ring-white/10 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
       }`}
     >
+      {/* Passing light shimmer effect on hover */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 -translate-x-full group-hover:translate-x-full pointer-events-none" style={{ transitionDuration: '1s' }} />
       {isSelected && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-10 bg-blue-500 rounded-r-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
       )}
