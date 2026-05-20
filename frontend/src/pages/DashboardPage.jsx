@@ -55,7 +55,8 @@ function DashboardContent({ accessToken, onLogout, user }) {
     historySearch, setHistorySearch,
     selectedIds, setSelectedIds,
     fetchSidebarHistory, deleteRecord, deleteSelected, toggleSelect,
-    handleAnalyze, filteredRepositories: filtered, selectedRepo
+    handleAnalyze, filteredRepositories: filtered, selectedRepo,
+    selectedRepositoryId, setSelectedRepositoryId,
   } = useDashboard();
 
 
