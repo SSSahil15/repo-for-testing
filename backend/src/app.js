@@ -11,19 +11,22 @@ const config = require("./config/env");
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN || "https://dummy@o0.ingest.sentry.io/0",
-  tracesSampleRate: 1.0,
+  // 10% sampling in production to avoid quota exhaustion; 100% in development
+  tracesSampleRate: config.isProduction ? 0.1 : 1.0,
   environment: config.isProduction ? "production" : "development"
 });
 
-const analyzeRoutes = require("./routes/analyze.routes");
-const authRoutes = require("./routes/auth.routes");
-const repoRoutes = require("./routes/repo.routes");
-const webhookRoutes = require("./routes/webhook.routes");
+
+const analyzeRoutes  = require("./routes/analyze.routes");
+const authRoutes     = require("./routes/auth.routes");
+const repoRoutes     = require("./routes/repo.routes");
+const webhookRoutes  = require("./routes/webhook.routes");
 const pipelineRoutes = require("./routes/pipeline.routes");
 const feedbackRoutes = require("./routes/feedback.routes");
-const reportRoutes = require("./routes/report.routes");
-const aiChatRoutes = require("./routes/aiChat.routes");
+const reportRoutes   = require("./routes/report.routes");
+const aiChatRoutes   = require("./routes/aiChat.routes");
 const { generalApiLimiter, authLimiter } = require("./middleware/rateLimiter");
+const { requestTiming, getMetrics }      = require("./middleware/requestTiming");
 
 const app = express();
 
@@ -87,6 +90,10 @@ app.use(helmet({
 app.use(morgan(config.isProduction ? "combined" : "dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Request Timing (p50/p95/p99 histogram) ─────────────────────────────────────
+// Mount early so ALL routes are timed including health checks
+app.use(requestTiming);
 
 // ─── Global Rate Limit (catch-all) ────────────────────────────────────────────
 app.use("/api", generalApiLimiter);
@@ -155,15 +162,27 @@ app.get("/health/ready", (req, res) => {
   }
 });
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/auth", authLimiter, authRoutes);
-app.use("/repos", repoRoutes);
-app.use("/analyze", analyzeRoutes);
-app.use("/webhooks", webhookRoutes);
+// ─── Routes ──────────────────────────────────────────────────────────────
+app.use("/auth",         authLimiter, authRoutes);
+app.use("/repos",        repoRoutes);
+app.use("/analyze",      analyzeRoutes);
+app.use("/webhooks",     webhookRoutes);
 app.use("/api/pipeline", pipelineRoutes);
 app.use("/api/feedback", feedbackRoutes);
-app.use("/api/reports", reportRoutes);
-app.use("/api/ai", aiChatRoutes);
+app.use("/api/reports",  reportRoutes);
+app.use("/api/ai",       aiChatRoutes);
+
+// ─── Metrics Endpoint ────────────────────────────────────────────────────────────
+// Returns per-route p50/p95/p99 latency histogram as JSON.
+// In production: only accessible from localhost / internal network.
+// Expose to external monitoring by pointing your APM scraper at /metrics.
+app.get("/metrics", (req, res) => {
+  const isLocal = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+  if (config.isProduction && !isLocal) {
+    return res.status(403).json({ message: "Metrics not publicly accessible." });
+  }
+  res.json(getMetrics());
+});
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

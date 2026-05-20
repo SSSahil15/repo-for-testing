@@ -24,6 +24,10 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // Performance thresholds
+  SLOW_QUERY_THRESHOLD_MS:   z.coerce.number().int().positive().default(100),
+  SLOW_REQUEST_THRESHOLD_MS: z.coerce.number().int().positive().default(1000),
+  GROQ_API_KEY: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -78,5 +82,9 @@ module.exports = {
     port: env.SMTP_PORT,
     user: env.SMTP_USER,
     pass: env.SMTP_PASS
-  }
+  },
+  // Performance monitoring thresholds
+  slowQueryThresholdMs:   env.SLOW_QUERY_THRESHOLD_MS,
+  slowRequestThresholdMs: env.SLOW_REQUEST_THRESHOLD_MS,
+  groqApiKey: env.GROQ_API_KEY,
 };

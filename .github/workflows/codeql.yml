@@ -6,12 +6,12 @@ on:
   pull_request:
     branches: [main, master]
   schedule:
-    - cron: "0 3 * * 1" # Monday 3am UTC — staggered from security scan
+    - cron: "0 3 * * 1" # Monday 3am UTC — staggered from security-scan
 
 permissions:
-  contents: read
+  contents:        read
   security-events: write
-  actions: read
+  actions:         read
 
 jobs:
   analyze:
@@ -23,72 +23,59 @@ jobs:
       fail-fast: false
       matrix:
         language: [javascript-typescript, python]
-        # ─── Add 'java' or 'go' here if those are ever introduced ───
+        # Add 'java' or 'go' here if they are introduced
 
     steps:
       - name: "📥 Checkout"
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history improves analysis depth
+        # fetch-depth default (1) is sufficient for CodeQL on interpreted languages
 
-      # ── For JS/TS: ensure deps are available for autobuild ──
-      - name: "⚙️ Setup Node.js (JS analysis)"
+      # Install deps so CodeQL autobuild can resolve imports correctly
+      - name: "⚙️ Setup Node.js"
         if: matrix.language == 'javascript-typescript'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: "📦 Install Node deps (Backend)"
+      - name: "📦 Install Node deps"
         if: matrix.language == 'javascript-typescript'
         run: |
-          cd backend && npm ci
+          cd backend  && npm ci
           cd ../frontend && npm ci
 
-      # ── For Python: ensure deps are available ──
-      - name: "🐍 Setup Python (Python analysis)"
+      - name: "🐍 Setup Python"
         if: matrix.language == 'python'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: "📦 Install Python deps (AI Service)"
+      - name: "📦 Install Python deps"
         if: matrix.language == 'python'
-        run: |
-          pip install -r ai/requirements.txt
+        run: pip install -r ai/requirements.txt
 
-      # ── CodeQL core steps ──
+      # ── CodeQL core ──
       - name: "🔧 Initialize CodeQL"
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          # Custom CodeQL query packs for deeper security coverage
           queries: +security-and-quality
-          # config-file: .github/codeql/codeql-config.yml  # Uncomment for custom config
 
       - name: "🏗️ Autobuild"
         uses: github/codeql-action/autobuild@v3
 
+      # analyze uploads SARIF to Security tab automatically (upload: true default)
+      # Do NOT add a separate upload-sarif step — it causes duplicate alerts
       - name: "🔍 Perform CodeQL Analysis"
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
-          output: codeql-results
-          upload: true  # Uploads SARIF to GitHub Security tab
-
-      - name: "📤 Upload CodeQL SARIF (explicit)"
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        continue-on-error: true
-        with:
-          sarif_file: codeql-results
-          category: codeql-${{ matrix.language }}
 
       - name: "📋 CodeQL summary"
         if: always()
         run: |
-          echo "## 🔍 CodeQL Analysis — ${{ matrix.language }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔍 CodeQL — ${{ matrix.language }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Analysis complete. View full results in the **Security → Code scanning** tab." >> $GITHUB_STEP_SUMMARY
+          echo "Results are in **Security → Code scanning alerts** tab." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY

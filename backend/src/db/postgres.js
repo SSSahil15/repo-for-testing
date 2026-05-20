@@ -1,9 +1,41 @@
 const { Pool } = require("pg");
-const config = require("../config/env");
+const { performance } = require("perf_hooks");
+const config  = require("../config/env");
+const logger  = require("../utils/logger");
+
+const SLOW_THRESHOLD_MS = config.slowQueryThresholdMs || 100;
 
 const pool = new Pool({
   connectionString: config.databaseUrl || "postgresql://devpulse:devpulse@localhost:5432/devpulse",
 });
+
+// ─── Slow Query Instrumentation ───────────────────────────────────────────────
+// Wrap pool.query so every DB call is timed and slow queries are logged.
+const _originalQuery = pool.query.bind(pool);
+pool.query = async function instrumentedQuery(textOrConfig, values) {
+  const start = performance.now();
+  let result;
+  try {
+    result = values !== undefined
+      ? await _originalQuery(textOrConfig, values)
+      : await _originalQuery(textOrConfig);
+  } finally {
+    const durationMs = performance.now() - start;
+    if (durationMs > SLOW_THRESHOLD_MS) {
+      // Extract query text safely — never log parameter values
+      const queryText = typeof textOrConfig === "string"
+        ? textOrConfig
+        : textOrConfig?.text || "unknown";
+      logger.warn("[DB] Slow query", {
+        query:       queryText.replace(/\s+/g, " ").trim().slice(0, 200),
+        duration_ms: Math.round(durationMs),
+        threshold_ms: SLOW_THRESHOLD_MS,
+        rows:        result?.rowCount ?? null,
+      });
+    }
+  }
+  return result;
+};
 
 async function migrate() {
   const client = await pool.connect();
