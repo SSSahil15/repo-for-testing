@@ -55,9 +55,9 @@ COPY --from=builder --chown=devpulse:devpulse /app/node_modules ./node_modules
 COPY --from=builder --chown=devpulse:devpulse /app/src ./src
 COPY --from=builder --chown=devpulse:devpulse /app/package.json ./
 
-# Create writable runtime directories for SQLite, Trivy cache, and scan clones.
-RUN mkdir -p /app/.data /app/.temp_scans /home/devpulse/.cache && \
-  chown -R devpulse:devpulse /app/.data /app/.temp_scans /home/devpulse/.cache
+# Create writable runtime directories for SQLite, Trivy cache, scan clones, and logs.
+RUN mkdir -p /app/.data /app/.temp_scans /app/logs /home/devpulse/.cache && \
+  chown -R devpulse:devpulse /app/.data /app/.temp_scans /app/logs /home/devpulse/.cache
 
 # Runtime config
 ENV NODE_ENV=production

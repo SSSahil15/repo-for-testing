@@ -1,5 +1,8 @@
+import json
+import logging
 import os
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 from typing import List, Optional
 from contextlib import asynccontextmanager
 
@@ -9,8 +12,57 @@ from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from services.predictor import FailurePredictor
+
+# ─── Structured JSON Logger ──────────────────────────────────────────────────────────────────────────
+
+_SENSITIVE_KEYS = frozenset([
+    "authorization", "x-api-key", "x-internal-secret",
+    "cookie", "token", "password", "secret",
+])
+
+
+class _JsonFormatter(logging.Formatter):
+    """Emit one JSON object per log line — matches backend winston format."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        entry: dict = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level":     record.levelname,
+            "service":   "devpulse-ai",
+            "logger":    record.name,
+            "message":   record.getMessage(),
+        }
+        # Attach any extra fields passed via the `extra` kwarg
+        for key, val in record.__dict__.items():
+            if key not in (
+                "args", "asctime", "created", "exc_info", "exc_text",
+                "filename", "funcName", "id", "levelname", "levelno",
+                "lineno", "message", "module", "msecs", "msg", "name",
+                "pathname", "process", "processName", "relativeCreated",
+                "stack_info", "thread", "threadName",
+            ) and not key.startswith("_"):
+                # Mask sensitive fields
+                entry[key] = "[REDACTED]" if key.lower() in _SENSITIVE_KEYS else val
+        if record.exc_info:
+            entry["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(entry)
+
+
+def _build_logger() -> logging.Logger:
+    handler = logging.StreamHandler()
+    handler.setFormatter(_JsonFormatter())
+    log = logging.getLogger("devpulse_ai")
+    log.setLevel(logging.DEBUG if os.getenv("NODE_ENV") != "production" else logging.INFO)
+    log.propagate = False
+    if not log.handlers:
+        log.addHandler(handler)
+    return log
+
+
+log = _build_logger()
 
 # ─── Sentry ───────────────────────────────────────────────────────────────────
 # Initialise BEFORE the FastAPI app is created so the integrations can
@@ -61,9 +113,12 @@ startup_complete = False
 async def lifespan(app: FastAPI):
     global startup_complete
     startup_complete = True
-    print(f"[AI Service] Startup complete (env={_ENV}, sentry={'on' if _SENTRY_DSN else 'off'}).")
+    log.info(
+        "AI service startup complete",
+        extra={"env": _ENV, "sentry": "on" if _SENTRY_DSN else "off"},
+    )
     yield
-    print("[AI Service] Shutting down gracefully...")
+    log.info("AI service shutting down gracefully")
 
 app = FastAPI(title="DevPulse AI Service", lifespan=lifespan)
 predictor = FailurePredictor()
@@ -97,6 +152,44 @@ app.add_middleware(
         "baggage",              # Sentry distributed tracing
     ],
 )
+
+# ─── HTTP Access Log Middleware ────────────────────────────────────────────────────────────
+# Logs every request as a JSON line matching the backend's http_access format.
+@app.middleware("http")
+async def http_access_log(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        log.error(
+            "http",
+            extra={
+                "type":        "http_access",
+                "method":      request.method,
+                "url":         str(request.url.path),
+                "status":      500,
+                "duration_ms": round((time.perf_counter() - start) * 1000),
+                "requestId":   request.headers.get("x-request-id", ""),
+                "error":       str(exc),
+            },
+        )
+        raise
+    duration_ms = round((time.perf_counter() - start) * 1000)
+    status = response.status_code
+    level = "error" if status >= 500 else "warning" if status >= 400 else "info"
+    getattr(log, level)(
+        "http",
+        extra={
+            "type":        "http_access",
+            "method":      request.method,
+            "url":         str(request.url.path),
+            "status":      status,
+            "duration_ms": duration_ms,
+            "requestId":   request.headers.get("x-request-id", ""),
+            "userAgent":   request.headers.get("user-agent", ""),
+        },
+    )
+    return response
 
 # ─── Models ───────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,6 @@
 const cors = require("cors");
 const express = require("express");
 const helmet = require("helmet");
-const morgan = require("morgan");
 const { exec } = require("child_process");
 const util = require("util");
 const execPromise = util.promisify(exec);
@@ -243,7 +242,32 @@ app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   next();
 });
-app.use(morgan(config.isProduction ? "combined" : "dev"));
+// ─── HTTP Access Logging (replaces morgan) ────────────────────────────────────
+// Unified JSON HTTP access log via winston — same format/transport as all
+// other logs so log aggregation tools (ELK, CloudWatch, Datadog) parse it
+// with a single JSON parser rather than two different formats.
+app.use((req, res, next) => {
+  const startNs = process.hrtime.bigint();
+  res.on("finish", () => {
+    const durationMs = Math.round(Number(process.hrtime.bigint() - startNs) / 1_000_000);
+    const status     = res.statusCode;
+    // Map HTTP status to log level: 5xx=error, 4xx=warn, else info
+    const level      = status >= 500 ? "error" : status >= 400 ? "warn" : "info";
+    logger[level]("http", {
+      type:        "http_access",
+      method:      req.method,
+      url:         req.originalUrl,
+      status,
+      duration_ms: durationMs,
+      requestId:   req.requestId,
+      userId:      req.user?.id || "anonymous",
+      ip:          req.ip,
+      userAgent:   req.headers["user-agent"],
+      referrer:    req.headers["referer"] || req.headers["referrer"] || "",
+    });
+  });
+  next();
+});
 // 50 KB body cap — prevents large-payload DoS before validation runs.
 // Webhooks send compact JSON payloads; nothing legitimate needs more than this.
 app.use(express.json({ limit: "50kb" }));

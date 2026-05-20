@@ -36,3 +36,6 @@ docker-reports/
 trivy-image.sarif
 codeql-results/
 .secrets.baseline
+
+# Winston daily-rotate log files
+logs/
