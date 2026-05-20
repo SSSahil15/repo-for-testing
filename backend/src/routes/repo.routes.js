@@ -4,6 +4,7 @@ const { z } = require("zod");
 const ensureAuthenticated = require("../middleware/ensureAuthenticated");
 const ensureGitHubTokenSynced = require("../middleware/ensureGitHubTokenSynced");
 const validate = require("../middleware/validate");
+const { repoLimiter } = require("../middleware/rateLimiter");
 const { fetchUserRepositories } = require("../services/github.service");
 const asyncHandler = require("../utils/asyncHandler");
 
@@ -16,7 +17,8 @@ const paginationSchema = z.object({
 
 router.get(
   "/",
-  ensureAuthenticated,
+  ensureAuthenticated,           // auth first (sets req.user for key generator)
+  repoLimiter,                   // 100 req / min per user — guards GitHub API upstream calls
   ensureGitHubTokenSynced,
   validate(paginationSchema, "query"),
   asyncHandler(async (req, res) => {

@@ -4,6 +4,7 @@ const { z } = require("zod");
 const ensureAuthenticated = require("../middleware/ensureAuthenticated");
 const ensureGitHubTokenSynced = require("../middleware/ensureGitHubTokenSynced");
 const validate = require("../middleware/validate");
+const { analyzeLimiter } = require("../middleware/rateLimiter");
 const { buildInitialAnalysis } = require("../services/analyze.service");
 const { fetchRepository, mapRepository } = require("../services/github.service");
 const asyncHandler = require("../utils/asyncHandler");
@@ -30,7 +31,8 @@ const analyzeSchema = z
 
 router.post(
   "/",
-  ensureAuthenticated,
+  ensureAuthenticated,           // auth first (sets req.user for key generator)
+  analyzeLimiter,                // 5 req / 24 h per user — most expensive endpoint
   ensureGitHubTokenSynced,
   validate(analyzeSchema, "body"),
   asyncHandler(async (req, res) => {

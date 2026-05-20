@@ -7,6 +7,7 @@ const { createReport, getReportByToken } = require("../services/report.service")
 const { pipelineDB } = require("../db/database");
 const config = require("../config/env");
 const redis = require("../services/redis.service");
+const { publicReportLimiter } = require("../middleware/rateLimiter");
 
 const router   = express.Router();
 const logger   = require("../utils/logger");
@@ -76,6 +77,7 @@ router.post(
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   "/:token",
+  publicReportLimiter,           // 100 req / min per IP — public, unauthenticated read
   validate(reportParamSchema, "params"),
   asyncHandler(async (req, res) => {
     const { token } = req.params;
