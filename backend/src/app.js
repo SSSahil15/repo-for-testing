@@ -11,23 +11,34 @@ const config = require("./config/env");
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN || "https://dummy@o0.ingest.sentry.io/0",
-  tracesSampleRate: 1.0,
+  // 10% sampling in production to avoid quota exhaustion; 100% in development
+  tracesSampleRate: config.isProduction ? 0.1 : 1.0,
   environment: config.isProduction ? "production" : "development"
 });
 
-const analyzeRoutes = require("./routes/analyze.routes");
-const authRoutes = require("./routes/auth.routes");
-const repoRoutes = require("./routes/repo.routes");
-const webhookRoutes = require("./routes/webhook.routes");
+
+const analyzeRoutes  = require("./routes/analyze.routes");
+const authRoutes     = require("./routes/auth.routes");
+const repoRoutes     = require("./routes/repo.routes");
+const webhookRoutes  = require("./routes/webhook.routes");
 const pipelineRoutes = require("./routes/pipeline.routes");
 const feedbackRoutes = require("./routes/feedback.routes");
-const reportRoutes = require("./routes/report.routes");
-const aiChatRoutes = require("./routes/aiChat.routes");
-const { generalApiLimiter, authLimiter } = require("./middleware/rateLimiter");
+const reportRoutes   = require("./routes/report.routes");
+const aiChatRoutes   = require("./routes/aiChat.routes");
+const { generalApiLimiter, authLimiter }    = require("./middleware/rateLimiter");
+const { requestTiming, getMetrics }          = require("./middleware/requestTiming");
+const requestId                              = require("./middleware/requestId");
+const { isHttpError }                        = require("./utils/httpError");
+
 
 const app = express();
 
 const logger = require("./utils/logger");
+
+// ─── Request ID ──────────────────────────────────────────────────────────────
+// Mount FIRST — before CORS, helmet, morgan, and all routes.
+// Stamps req.requestId on every request and sets X-Request-ID response header.
+app.use(requestId);
 
 // ─── Swagger Documentation ────────────────────────────────────────────────────
 if (!config.isProduction) {
@@ -87,6 +98,10 @@ app.use(helmet({
 app.use(morgan(config.isProduction ? "combined" : "dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Request Timing (p50/p95/p99 histogram) ─────────────────────────────────────
+// Mount early so ALL routes are timed including health checks
+app.use(requestTiming);
 
 // ─── Global Rate Limit (catch-all) ────────────────────────────────────────────
 app.use("/api", generalApiLimiter);
@@ -155,15 +170,27 @@ app.get("/health/ready", (req, res) => {
   }
 });
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/auth", authLimiter, authRoutes);
-app.use("/repos", repoRoutes);
-app.use("/analyze", analyzeRoutes);
-app.use("/webhooks", webhookRoutes);
+// ─── Routes ──────────────────────────────────────────────────────────────
+app.use("/auth",         authLimiter, authRoutes);
+app.use("/repos",        repoRoutes);
+app.use("/analyze",      analyzeRoutes);
+app.use("/webhooks",     webhookRoutes);
 app.use("/api/pipeline", pipelineRoutes);
 app.use("/api/feedback", feedbackRoutes);
-app.use("/api/reports", reportRoutes);
-app.use("/api/ai", aiChatRoutes);
+app.use("/api/reports",  reportRoutes);
+app.use("/api/ai",       aiChatRoutes);
+
+// ─── Metrics Endpoint ────────────────────────────────────────────────────────────
+// Returns per-route p50/p95/p99 latency histogram as JSON.
+// In production: only accessible from localhost / internal network.
+// Expose to external monitoring by pointing your APM scraper at /metrics.
+app.get("/metrics", (req, res) => {
+  const isLocal = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+  if (config.isProduction && !isLocal) {
+    return res.status(403).json({ message: "Metrics not publicly accessible." });
+  }
+  res.json(getMetrics());
+});
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -172,28 +199,91 @@ app.use((req, res) => {
   });
 });
 
-// ─── Global Error Handler ─────────────────────────────────────────────────────
+// ─── Global Error Handler ──────────────────────────────────────────────────────────────
 Sentry.setupExpressErrorHandler(app);
 
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
 
+  // ── GitHub API error (axios 4xx/5xx pass-through) ───────────────────────────
   if (error.response?.data?.message) {
+    logger.warn("[ErrorHandler] GitHub API error", {
+      requestId:  req.requestId,
+      userId:     req.user?.id,
+      path:       req.path,
+      status:     error.response.status,
+      detail:     error.response.data.message,
+    });
     return res.status(error.response.status || 502).json({
       message: "GitHub API request failed.",
       details: error.response.data.message,
     });
   }
 
+  // ── CORS rejection ──────────────────────────────────────────────────────────
   if (error.message === "Origin is not allowed by CORS.") {
+    logger.warn("[ErrorHandler] CORS rejection", {
+      requestId: req.requestId,
+      origin:    req.headers.origin,
+    });
     return res.status(403).json({ message: error.message });
   }
 
-  console.error(error);
+  // ── Determine if this is an expected operational error or an unexpected bug ──
+  const statusCode    = error.statusCode || 500;
+  const isOperational = isHttpError(error) || statusCode < 500;
 
-  return res.status(error.statusCode || 500).json({
-    message: error.message || "Internal server error.",
+  // Build a structured log payload (no sensitive data — logger masks it)
+  const logPayload = {
+    requestId:  req.requestId,
+    userId:     req.user?.id || "anonymous",
+    method:     req.method,
+    path:       req.path,
+    statusCode,
+    message:    error.message,
+    stack:      error.stack,
+  };
+
+  if (isOperational) {
+    // Expected error (e.g. 401, 404, validation failure) — log at WARN
+    logger.warn("[ErrorHandler] Operational error", logPayload);
+  } else {
+    // Unexpected bug — log at ERROR so it triggers alerts, and Sentry already
+    // captured it via setupExpressErrorHandler above
+    logger.error("[ErrorHandler] Unexpected server error", logPayload);
+  }
+
+  return res.status(statusCode).json({
+    message:   error.message || "Internal server error.",
+    requestId: req.requestId, // Return ID so users can quote it in bug reports
   });
 });
 
 module.exports = app;
+
+// ─── Process-level Safety Net ──────────────────────────────────────────────────────────────
+// These handlers ensure crashes and unhandled Promise rejections are always
+// logged to structured output (and thus to Sentry/Render logs) before exit.
+// Without these, a mis-handled Promise rejection kills the process silently.
+
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("[Process] Unhandled Promise rejection — SHUTTING DOWN", {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack:  reason instanceof Error ? reason.stack : undefined,
+  });
+  Sentry.captureException(
+    reason instanceof Error ? reason : new Error(String(reason)),
+    { extra: { type: "unhandledRejection" } }
+  );
+  // Give Sentry time to flush before killing the process
+  setTimeout(() => process.exit(1), 1000).unref();
+});
+
+process.on("uncaughtException", (err) => {
+  logger.error("[Process] Uncaught exception — SHUTTING DOWN", {
+    message: err.message,
+    stack:   err.stack,
+  });
+  Sentry.captureException(err, { extra: { type: "uncaughtException" } });
+  setTimeout(() => process.exit(1), 1000).unref();
+});

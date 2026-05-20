@@ -269,6 +269,25 @@ jobs:
           scanners: vuln,secret,config
         continue-on-error: true
 
+      - name: "🛡️ Trivy — SARIF upload (Security Tab)"
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: security-reports/trivy-fs.sarif
+          severity: CRITICAL,HIGH
+          scanners: vuln,secret
+          exit-code: "0"
+
+      - name: "📤 Upload Trivy SARIF"
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: security-reports/trivy-fs.sarif
+          category: trivy-filesystem
+
       - name: "📊 Parse vulnerability counts"
         id: vuln_count
         if: always()
@@ -366,6 +385,14 @@ jobs:
             echo "✅ **Clean scan — no vulnerabilities detected**" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ **$TOTAL vulnerabilities found** — review the security-reports artifact" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: "🚨 Fail on critical vulnerabilities"
+        run: |
+          CRITICAL=${{ steps.vuln_count.outputs.vuln_critical || 0 }}
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::$CRITICAL CRITICAL vulnerabilities found — deployment is blocked. Review the security-reports artifact."
+            exit 1
           fi
 
       - name: "📤 Upload security reports"

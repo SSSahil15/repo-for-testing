@@ -29,3 +29,10 @@ trivy-results.json
 coverage
 .temp_scans
 devpulse-scan.yml
+
+# Security scan outputs
+security-reports/
+docker-reports/
+trivy-image.sarif
+codeql-results/
+.secrets.baseline

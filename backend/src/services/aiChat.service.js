@@ -1,4 +1,6 @@
-const axios = require("axios");
+const axios  = require("axios");
+const logger = require("../utils/logger");
+
 
 /**
  * AI Copilot Service (Action-First Architecture)
@@ -79,10 +81,11 @@ Expected JSON schema:
   messages.push({ role: "user", content: query });
 
   try {
+    const llmStart = Date.now();
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "llama-3.3-70b-versatile", // Use active model
+        model: "llama-3.3-70b-versatile",
         messages: messages,
         response_format: { type: "json_object" },
         temperature: 0.2,
@@ -93,21 +96,35 @@ Expected JSON schema:
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
-        timeout: 8000 // 8 second timeout
+        timeout: 8000
       }
     );
+    const llmDurationMs = Date.now() - llmStart;
 
     const content = response.data.choices[0].message.content;
-    const parsed = JSON.parse(content);
-    
+    const parsed  = JSON.parse(content);
+    const tokensUsed = response.data.usage?.total_tokens ?? null;
+
+    logger.info("[Groq] LLM call succeeded", {
+      model:       "llama-3.3-70b-versatile",
+      duration_ms: llmDurationMs,
+      tokens_used: tokensUsed,
+      fallback:    false,
+    });
+
     // Ensure standard fields
     parsed.confidence = "HIGH";
-    if (!parsed.limitations) parsed.limitations = "None (Full context provided)";
+    if (!parsed.limitations)     parsed.limitations     = "None (Full context provided)";
     if (!parsed.suggestedActions) parsed.suggestedActions = ["Explain further"];
-    
+
     return parsed;
   } catch (err) {
-    console.error("[Primary LLM] Failed:", err.response?.data || err.message);
+    logger.warn("[Groq] LLM call failed", {
+      model:   "llama-3.3-70b-versatile",
+      message: err.response?.data?.error?.message || err.message,
+      status:  err.response?.status ?? null,
+      fallback: true,
+    });
     throw new Error("Primary LLM Failed");
   }
 }
@@ -212,8 +229,11 @@ async function generateHybridChatResponse(query, context, conversationHistory = 
     const primaryResult = await callPrimaryLLM(query, context, conversationHistory);
     return primaryResult;
   } catch (err) {
-    // 2. Fallback
-    console.warn("[Hybrid AI] Falling back to intelligent data-driven heuristics.");
+    // 2. Fallback — log the switch so it's visible in metrics
+    logger.warn("[Groq] Falling back to heuristic engine", {
+      reason:   err.message,
+      fallback: true,
+    });
     const fallbackResult = callFallbackEngine(query, pipelineData, analysisResult, conversationHistory);
     return fallbackResult;
   }

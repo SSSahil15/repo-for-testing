@@ -1,10 +1,41 @@
 const axios = require("axios");
 const crypto = require("crypto");
 const config = require("../config/env");
-const redis = require("./redis.service");
+const redis  = require("./redis.service");
+const logger = require("../utils/logger");
+
+// ─── Lightweight Circuit Breaker ──────────────────────────────────────────────
+const circuitBreaker = {
+  failures:  0,
+  openUntil: null,
+  THRESHOLD: 3,           // open after N consecutive failures
+  RESET_MS:  30_000,      // stay open for 30s, then half-open
+
+  isOpen() {
+    if (this.openUntil && Date.now() < this.openUntil) return true;
+    if (this.openUntil && Date.now() >= this.openUntil) {
+      // half-open: allow one probe
+      this.openUntil = null;
+    }
+    return false;
+  },
+
+  recordSuccess() { this.failures = 0; this.openUntil = null; },
+
+  recordFailure() {
+    this.failures += 1;
+    if (this.failures >= this.THRESHOLD) {
+      this.openUntil = Date.now() + this.RESET_MS;
+      logger.warn("[GitHub] Circuit breaker OPEN — GitHub API unavailable, short-circuiting for 30s", {
+        failures: this.failures,
+        resetAt:  new Date(this.openUntil).toISOString(),
+      });
+    }
+  },
+};
 
 function createGitHubClient(accessToken) {
-  return axios.create({
+  const client = axios.create({
     baseURL: "https://api.github.com",
     headers: {
       Accept: "application/vnd.github+json",
@@ -14,6 +45,53 @@ function createGitHubClient(accessToken) {
     },
     timeout: 10000
   });
+
+  // ─── Request timing interceptors ─────────────────────────────────────────
+  client.interceptors.request.use((cfg) => {
+    // Attach start time so the response interceptor can compute duration
+    cfg.metadata = { startMs: Date.now() };
+
+    // Circuit breaker gate
+    if (circuitBreaker.isOpen()) {
+      const err = new Error("GitHub API circuit breaker is open — too many consecutive failures");
+      err.code = "CIRCUIT_OPEN";
+      return Promise.reject(err);
+    }
+
+    return cfg;
+  });
+
+  client.interceptors.response.use(
+    (response) => {
+      const durationMs = Date.now() - (response.config.metadata?.startMs || Date.now());
+      circuitBreaker.recordSuccess();
+      logger.info("[GitHub] API call", {
+        endpoint:    response.config.url,
+        method:      response.config.method?.toUpperCase(),
+        status:      response.status,
+        duration_ms: durationMs,
+        rate_limit_remaining: response.headers["x-ratelimit-remaining"] ?? null,
+      });
+      return response;
+    },
+    (error) => {
+      const durationMs = Date.now() - (error.config?.metadata?.startMs || Date.now());
+      if (error.code !== "CIRCUIT_OPEN") {
+        circuitBreaker.recordFailure();
+      }
+      logger.warn("[GitHub] API error", {
+        endpoint:    error.config?.url,
+        method:      error.config?.method?.toUpperCase(),
+        status:      error.response?.status ?? null,
+        duration_ms: durationMs,
+        code:        error.code,
+        message:     error.message,
+      });
+      return Promise.reject(error);
+    }
+  );
+
+  return client;
 }
 
 function mapRepository(repository) {
