@@ -78,6 +78,7 @@ const pipelineRoutes = require("./routes/pipeline.routes");
 const feedbackRoutes = require("./routes/feedback.routes");
 const reportRoutes   = require("./routes/report.routes");
 const aiChatRoutes   = require("./routes/aiChat.routes");
+const dbStatsRoutes  = require("./routes/db-stats.routes");
 const { generalApiLimiter, authLimiter }    = require("./middleware/rateLimiter");
 const { requestTiming, getMetrics }          = require("./middleware/requestTiming");
 const requestId                              = require("./middleware/requestId");
@@ -370,6 +371,7 @@ app.use("/api/pipeline", pipelineRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/reports",  reportRoutes);
 app.use("/api/ai",       aiChatRoutes);
+app.use("/api/admin/db-stats", dbStatsRoutes);  // DB observability — auth-gated
 
 // ─── Metrics Endpoint ────────────────────────────────────────────────────────────
 // Returns per-route p50/p95/p99 latency histogram as JSON.

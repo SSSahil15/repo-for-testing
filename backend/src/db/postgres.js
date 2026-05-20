@@ -45,6 +45,14 @@ async function migrate() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    // Enable per-query statistics tracking (available on managed PG; no-op if already on)
+    // Allows pg_stat_statements view for slow query analysis.
+    // Must be superuser or pg_monitor role — wrapping in try/catch so it never
+    // blocks migration if the DB user lacks that privilege (e.g. Render's free tier).
+    try {
+      await client.query(`CREATE EXTENSION IF NOT EXISTS pg_stat_statements;`);
+    } catch (_) { /* superuser not available — skip silently */ }
     
     await client.query(`
       CREATE TABLE IF NOT EXISTS pipeline_results (
@@ -77,6 +85,9 @@ async function migrate() {
     // Composite index: covers all filtered+sorted queries (repo+branch+received_at)
     // Supersedes separate idx_pipeline_repository for queries that also ORDER BY received_at
     await client.query(`CREATE INDEX IF NOT EXISTS idx_pipeline_repo_received ON pipeline_results(repository, received_at DESC);`);
+    // 3-column composite for WHERE repository=$1 AND branch=$2 ORDER BY received_at DESC
+    // Allows a single index scan instead of two index scans merged via BitmapAnd.
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pipeline_repo_branch_received ON pipeline_results(repository, branch, received_at DESC);`);
     // Covers the COUNT(*) FILTER (WHERE overall_status = 'success') in getHealth()
     await client.query(`CREATE INDEX IF NOT EXISTS idx_pipeline_overall_status ON pipeline_results(overall_status);`);
 
@@ -94,6 +105,8 @@ async function migrate() {
 
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scanjob_repository ON scan_jobs(repository);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_scanjob_status ON scan_jobs(status);`);
+    // Age-based cleanup queries filter by created_at — without this index they seq-scan
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_scanjob_created ON scan_jobs(created_at);`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS reports (

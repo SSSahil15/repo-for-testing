@@ -72,7 +72,7 @@ const pipelineDB = {
 
     let query, params;
     if (repository && branch) {
-      // Uses composite index idx_pipeline_repo_received + idx_pipeline_branch
+      // Uses 3-column composite index idx_pipeline_repo_branch_received
       query  = `SELECT ${cols} FROM pipeline_results WHERE repository = $1 AND branch = $2 ORDER BY received_at DESC LIMIT $3 OFFSET $4`;
       params = [repository, branch, safeLimit, safeOffset];
     } else if (repository) {
@@ -87,6 +87,57 @@ const pipelineDB = {
 
     const { rows } = await pool.query(query, params);
     return rows.map(parsePipelineRow);
+  },
+
+  /**
+   * Same as findFiltered but also returns the true total count matching the
+   * filter — done in a SINGLE query using COUNT(*) OVER () window function.
+   * This avoids the N+1 pattern of running a separate COUNT query for pagination.
+   *
+   * Returns: { rows: PipelineRow[], total: number }
+   *
+   * @param {object} opts - Same options as findFiltered
+   */
+  async findFilteredWithCount({ repository, branch, limit = 20, offset = 0, columns = "full" }) {
+    const safeLimit  = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+    const cols       = PIPELINE_COLUMNS[columns] || PIPELINE_COLUMNS.full;
+
+    // Wrap query in a CTE and add COUNT(*) OVER () as a window function.
+    // Postgres computes the count without a second seq-scan — the planner
+    // reuses the same execution node for both the window agg and the data fetch.
+    let innerWhere, params;
+    if (repository && branch) {
+      innerWhere = `WHERE repository = $1 AND branch = $2`;
+      params     = [repository, branch, safeLimit, safeOffset];
+    } else if (repository) {
+      innerWhere = `WHERE repository = $1`;
+      params     = [repository, safeLimit, safeOffset];
+    } else {
+      innerWhere = ``;
+      params     = [safeLimit, safeOffset];
+    }
+
+    // $N for limit/offset depends on how many filter params came before
+    const limitIdx  = params.length - 1;  // e.g. 3 if repo+branch
+    const offsetIdx = params.length;       // e.g. 4 if repo+branch
+
+    const query = `
+      SELECT ${cols}, COUNT(*) OVER () AS _total_count
+      FROM   pipeline_results
+      ${innerWhere}
+      ORDER  BY received_at DESC
+      LIMIT  $${limitIdx} OFFSET $${offsetIdx}
+    `;
+
+    const { rows } = await pool.query(query, params);
+    const total = rows.length > 0 ? parseInt(rows[0]._total_count, 10) : 0;
+
+    // Strip the internal _total_count column before returning parsed rows
+    return {
+      rows:  rows.map((r) => { const { _total_count, ...rest } = r; return parsePipelineRow(rest); }),
+      total,
+    };
   },
 
   /**
@@ -261,6 +312,22 @@ const scanJobDB = {
       [errorMsg, new Date().toISOString(), id]
     );
   },
+
+  /**
+   * Delete scan jobs older than `days` days.
+   * Uses idx_scanjob_created — no seq-scan.
+   * Called from the hourly cleanup interval alongside pipeline_results and reports.
+   *
+   * @param {number} [days=7] - Retention window in days
+   * @returns {number} Number of rows deleted
+   */
+  async cleanupOld(days = 7) {
+    const { rowCount } = await pool.query(
+      `DELETE FROM scan_jobs WHERE created_at < NOW() - ($1 || ' days')::INTERVAL`,
+      [days]
+    );
+    return rowCount;
+  },
 };
 
 // ─── Report Helpers ───────────────────────────────────────────────────────────
@@ -353,11 +420,16 @@ if (process.env.NODE_ENV !== "test") {
         try {
           await reportDB.cleanupExpired();
 
-          const { rowCount } = await pool.query(
+          const { rowCount: pipelineDeleted } = await pool.query(
             `DELETE FROM pipeline_results WHERE received_at < NOW() - INTERVAL '7 days'`
           );
-          if (rowCount > 0) {
-            logger.info(`[DB] Cleaned up ${rowCount} pipeline result(s) older than 7 days.`);
+          if (pipelineDeleted > 0) {
+            logger.info(`[DB] Cleaned up ${pipelineDeleted} pipeline result(s) older than 7 days.`);
+          }
+
+          const scanDeleted = await scanJobDB.cleanupOld(7);
+          if (scanDeleted > 0) {
+            logger.info(`[DB] Cleaned up ${scanDeleted} scan job(s) older than 7 days.`);
           }
         } catch (err) {
           logger.error("[DB] Cleanup job error", { error: err.message });

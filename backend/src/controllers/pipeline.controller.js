@@ -131,16 +131,21 @@ const getSimulationStatus = async (req, res) => {
 
 const getResultsList = async (req, res) => {
   const { repository, branch, limit: rawLimit, offset: rawOffset } = req.query;
-  const limit = Math.min(Math.max(Number(rawLimit) || 20, 1), 100);
+  const limit  = Math.min(Math.max(Number(rawLimit)  || 20, 1), 100);
   const offset = Math.max(Number(rawOffset) || 0, 0);
 
-  const results = await pipelineDB.findFiltered({ repository, branch, limit, offset });
+  // findFilteredWithCount uses COUNT(*) OVER() window function — returns the
+  // true total matching rows in a SINGLE query (no separate COUNT round-trip).
+  const { rows, total } = await pipelineDB.findFilteredWithCount({
+    repository, branch, limit, offset,
+  });
 
   return res.status(200).json({
-    total: results.length,
+    total,   // real DB count — not just the current page batch size
     limit,
     offset,
-    results,
+    hasMore: offset + rows.length < total,
+    results: rows,
   });
 };
 
