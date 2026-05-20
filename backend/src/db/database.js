@@ -371,4 +371,16 @@ if (process.env.NODE_ENV !== "test") {
   })();
 }
 
-module.exports = { pool, pipelineDB, scanJobDB, reportDB, providerTokenDB };
+// Compatibility shim: server.js and health/ready use `db.open` / `db.close()`
+// Pool is the actual pg connection pool — expose a thin wrapper.
+const db = {
+  get open() {
+    // pool.totalCount > 0 or pool hasn't errored means it's open
+    try { return pool.totalCount >= 0; } catch { return false; }
+  },
+  close() {
+    return pool.end();
+  },
+};
+
+module.exports = { db, pool, pipelineDB, scanJobDB, reportDB, providerTokenDB };

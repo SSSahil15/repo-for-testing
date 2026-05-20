@@ -121,7 +121,7 @@ export const handlers = [
   ),
 
   // AI Chat
-  http.post(`${API_BASE}/api/ai-chat`, () =>
+  http.post(`${API_BASE}/api/ai/chat`, () =>
     HttpResponse.json({ answer: "Here is my analysis.", sources: [] })
   ),
 ];

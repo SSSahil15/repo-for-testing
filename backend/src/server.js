@@ -1,32 +1,32 @@
-const app = require("./app");
+const app    = require("./app");
 const config = require("./config/env");
+const logger = require("./utils/logger");
 const { db } = require("./db/database");
 
 const server = app.listen(config.port, () => {
-  console.log(`DevPulse backend listening on http://localhost:${config.port}`);
+  logger.info(`DevPulse backend listening on http://localhost:${config.port}`);
 });
 
-function shutdown() {
-  console.log("\n[Server] Received kill signal, shutting down gracefully...");
-  
-  server.close(() => {
-    console.log("[Server] Closed out remaining HTTP connections.");
+async function shutdown() {
+  logger.info("[Server] Received kill signal, shutting down gracefully...");
+
+  server.close(async () => {
+    logger.info("[Server] Closed out remaining HTTP connections.");
     try {
-      db.close();
-      console.log("[DB] SQLite connection closed successfully.");
+      await db.close();
+      logger.info("[DB] PostgreSQL pool closed successfully.");
     } catch (err) {
-      console.error("[DB] Error closing SQLite database:", err);
+      logger.error("[DB] Error closing database pool:", { error: err.message });
     }
     process.exit(0);
   });
 
   // Force close after 10 seconds
   setTimeout(() => {
-    console.error("[Server] Could not close connections in time, forcefully shutting down");
+    logger.error("[Server] Could not close connections in time, forcefully shutting down");
     process.exit(1);
   }, 10000).unref();
 }
 
 process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
+process.on("SIGINT",  shutdown);

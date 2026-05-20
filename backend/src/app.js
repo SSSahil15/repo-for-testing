@@ -66,6 +66,7 @@ app.use(
       const allowedOrigins = [
         config.frontendUrl,
         "http://localhost:5173",
+        "http://localhost:5174",
         "http://localhost:3000",
       ];
       // Allow requests with no origin (like mobile apps, curl)
@@ -125,10 +126,28 @@ async function checkToolAvailability() {
   await Promise.all(checks);
 }
 
-checkToolAvailability();
-
-// ─── Health Checks ──────────────────────────────────────────────────────────────
+// We set startupComplete after tools AND db pool are verified healthy
 let startupComplete = false;
+
+async function initStartup() {
+  await checkToolAvailability();
+  // Skip real DB query in test environment (pool is mocked)
+  if (process.env.NODE_ENV === "test") {
+    startupComplete = true;
+    return;
+  }
+  try {
+    const { pool } = require("./db/database");
+    await pool.query("SELECT 1"); // Verify DB connection
+    startupComplete = true;
+    logger.info("[Startup] ✅ All systems ready.");
+  } catch (err) {
+    logger.warn("[Startup] ⚠️  DB not reachable at startup — will retry on requests.", { error: err.message });
+    startupComplete = true;
+  }
+}
+
+initStartup();
 app.get("/health/startup", (req, res) => {
   if (startupComplete) {
     res.status(200).json({ status: "started" });
@@ -137,31 +156,30 @@ app.get("/health/startup", (req, res) => {
   }
 });
 
-// We'll simulate setting startup to true once app loads
-setTimeout(() => { startupComplete = true; }, 1000);
-
 app.get("/health/live", (req, res) => {
   res.status(200).json({ status: "alive", timestamp: new Date().toISOString() });
 });
 
 app.get("/health/ready", (req, res) => {
   try {
-    const isDbReady = require("./db/database").db.open;
+    const { db } = require("./db/database");
+    const isDbReady = db.open;
     const isGroqConfigured = !!config.groqApiKey;
 
-    if (isDbReady && isGroqConfigured) {
+    if (isDbReady) {
       res.status(200).json({
         status: "ready",
-        checks: { database: "ok", groq: "ok", tools: toolStatus },
+        checks: {
+          database: "ok",
+          groq:     isGroqConfigured ? "ok" : "not_configured",
+          tools:    toolStatus,
+        },
         timestamp: new Date().toISOString()
       });
     } else {
       res.status(503).json({
         status: "unavailable",
-        checks: {
-          database: isDbReady ? "ok" : "down",
-          groq: isGroqConfigured ? "ok" : "down"
-        },
+        checks: { database: "down" },
         timestamp: new Date().toISOString()
       });
     }

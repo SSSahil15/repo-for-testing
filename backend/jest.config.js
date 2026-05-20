@@ -28,5 +28,6 @@ module.exports = {
 
   // Allow slow async DB operations without Jest's default 5s timeout
   testTimeout: 15000,
-  setupFiles: ['./src/__tests__/setup.js'],
+  setupFiles:           ['./src/__tests__/setup.js'],
+  setupFilesAfterEnv:   ['./src/__tests__/setupMocks.js'],
 };

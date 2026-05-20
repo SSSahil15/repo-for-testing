@@ -8,7 +8,8 @@ const { pipelineDB } = require("../db/database");
 const config = require("../config/env");
 const redis = require("../services/redis.service");
 
-const router = express.Router();
+const router   = express.Router();
+const logger   = require("../utils/logger");
 const validate = require("../middleware/validate");
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
@@ -36,20 +37,13 @@ router.post(
   "/",
   ensureAuthenticated,
   ensureGitHubTokenSynced,
+  validate(createReportSchema, "body"),
   asyncHandler(async (req, res) => {
-    const parsed = createReportSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        message: "Invalid request body.",
-        errors: parsed.error.flatten().fieldErrors,
-      });
-    }
-
-    const { repository, repoMeta } = parsed.data;
+    const { repository, repoMeta } = req.body;
 
     // Find latest pipeline data for this repo from DB
     const results = await pipelineDB.findFiltered({ repository, limit: 1 });
-    const latest = results[0];
+    const latest  = results[0];
 
     if (!latest) {
       return res.status(404).json({
@@ -61,16 +55,16 @@ router.post(
       repository,
       repoMeta: repoMeta || {},
       devpulseScore: latest.devpulseScore,
-      stages: latest.stages,
-      insights: latest.insights,
-      createdBy: req.user?.username || "anonymous",
+      stages:        latest.stages,
+      insights:      latest.insights,
+      createdBy:     req.user?.username || "anonymous",
     });
 
     const shareUrl = `${config.frontendUrl}/report/${report.token}`;
 
     return res.status(201).json({
-      message: "Shareable report created successfully.",
-      token: report.token,
+      message:   "Shareable report created successfully.",
+      token:     report.token,
       shareUrl,
       expiresAt: report.expiresAt,
     });
@@ -90,7 +84,7 @@ router.get(
     let report = await redis.get(cacheKey);
     
     if (report) {
-      console.log(`[Reports] Cache HIT for shared report token: ${token}`);
+      logger.debug(`[Reports] Cache HIT for shared report token`, { token });
     } else {
       report = await getReportByToken(token);
       if (report && !report.expired) {

@@ -185,7 +185,8 @@ ${record.insights?'<div class="section"><div class="section-label">💡 AI Insig
     } catch {
       // Best-effort — still log out locally even if the server call fails
     }
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    // Clear the persisted last-selected repo key (mirrors the key in DashboardContext)
+    try { localStorage.removeItem(`devpulse_last_repo_${user?.id}`); } catch {}
     onLogout();
   }
 

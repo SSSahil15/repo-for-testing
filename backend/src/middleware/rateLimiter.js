@@ -36,32 +36,46 @@ const ipKeyGenerator = (req) => req.ip;
  * Factory to create standardized limiters
  */
 function createLimiter({ windowMs, max, name, useUserId = false }) {
-  const store = (redisService.isConnected() && redisService.client) 
-    ? new RedisStore({
-        sendCommand: (...args) => redisService.client.sendCommand(args),
-        prefix: `rl_${name.replace(/\s+/g, '_')}:`
-      })
-    : undefined; // Falls back to built-in MemoryStore
+  /**
+   * Lazily resolve the Redis store on each rateLimit instantiation attempt.
+   * Using a getter avoids calling redisService.isConnected() at module-load
+   * time, which would crash in test environments where the module isn't yet
+   * mocked. In production this also means a Redis reconnect is picked up
+   * without restarting the process.
+   */
+  const getStore = () => {
+    const connected =
+      typeof redisService.isConnected === 'function'
+        ? redisService.isConnected()
+        : Boolean(redisService.isConnected);
+
+    return (connected && redisService.client)
+      ? new RedisStore({
+          sendCommand: (...args) => redisService.client.sendCommand(args),
+          prefix: `rl_${name.replace(/\s+/g, '_')}:`,
+        })
+      : undefined; // Falls back to built-in MemoryStore
+  };
 
   return rateLimit({
     windowMs,
     max,
     standardHeaders: true,
-    legacyHeaders: false,
-    store,
-    skip: skipHandler,
-    keyGenerator: useUserId ? userKeyGenerator : ipKeyGenerator,
+    legacyHeaders:   false,
+    store:           getStore(),
+    skip:            skipHandler,
+    keyGenerator:    useUserId ? userKeyGenerator : ipKeyGenerator,
     handler(req, res) {
       logger.warn(`[RateLimit] Limit hit for ${name} by ${useUserId && req.user ? 'User ' + req.user.id : 'IP ' + req.ip}`);
-      
+
       // If it's the auth endpoint, log heavily and report to Sentry (potential abuse)
       if (name === "GitHub auth") {
         Sentry.captureMessage(`[RateLimit] Potential abuse on auth endpoint by IP ${req.ip}`, "warning");
       }
 
       res.status(429).json({
-        message: `Rate limit exceeded for ${name}. Please try again later.`,
-        resetTime: new Date(Date.now() + windowMs).toISOString(),
+        message:           `Rate limit exceeded for ${name}. Please try again later.`,
+        resetTime:         new Date(Date.now() + windowMs).toISOString(),
         retryAfterSeconds: Math.ceil(windowMs / 1000),
       });
     },
