@@ -6,3 +6,4 @@ pandas==2.3.3
 numpy==1.26.4
 python-dotenv==1.2.2
 requests==2.34.2
+sentry-sdk[fastapi]==2.29.1

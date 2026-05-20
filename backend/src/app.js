@@ -6,16 +6,70 @@ const { exec } = require("child_process");
 const util = require("util");
 const execPromise = util.promisify(exec);
 const Sentry = require("@sentry/node");
+const { nodeProfilingIntegration } = require("@sentry/profiling-node");
 
 const config = require("./config/env");
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN || "https://dummy@o0.ingest.sentry.io/0",
-  // 10% sampling in production to avoid quota exhaustion; 100% in development
-  tracesSampleRate: config.isProduction ? 0.1 : 1.0,
-  environment: config.isProduction ? "production" : "development"
-});
+// Sensitive header/body keys that must never appear in Sentry events
+const SENTRY_REDACT_HEADERS = new Set([
+  "authorization", "cookie", "x-internal-secret", "x-api-key",
+]);
+const SENTRY_REDACT_BODY_KEYS = [
+  "password", "token", "secret", "access_token", "code",
+  "encrypted_token", "refresh_token", "client_secret",
+];
 
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",  // Empty string = Sentry disabled (no dummy DSN)
+  release: process.env.SENTRY_RELEASE || "devpulse-backend@dev",
+  environment: config.isProduction ? "production" : "development",
+
+  integrations: [
+    // Auto-instruments http/https — captures outbound GitHub API + AI service calls
+    // as child spans so they appear in the performance waterfall.
+    Sentry.httpIntegration({ tracing: true }),
+    nodeProfilingIntegration(),
+  ],
+
+  // Trace every request in dev, 10% in prod to control quota.
+  tracesSampleRate:   config.isProduction ? 0.1 : 1.0,
+  // CPU profiling: 10% of sampled transactions in prod, off in dev.
+  profilesSampleRate: config.isProduction ? 0.1 : 0.0,
+
+  // Propagate trace headers to downstream services (AI service)
+  // so AI spans appear as children of backend transactions.
+  tracePropagationTargets: [
+    "localhost",
+    /^\/api/,
+    config.aiServiceUrl,
+  ].filter(Boolean),
+
+  /**
+   * beforeSend — strip PII and credentials before the event leaves the process.
+   * Runs synchronously; return null to drop the event entirely.
+   */
+  beforeSend(event) {
+    // ── Strip sensitive request headers ──────────────────────────────────────
+    const headers = event.request?.headers;
+    if (headers && typeof headers === "object") {
+      for (const key of Object.keys(headers)) {
+        if (SENTRY_REDACT_HEADERS.has(key.toLowerCase())) {
+          headers[key] = "[REDACTED]";
+        }
+      }
+    }
+
+    // ── Strip sensitive body fields ───────────────────────────────────────────
+    const body = event.request?.data;
+    if (body && typeof body === "object") {
+      for (const key of SENTRY_REDACT_BODY_KEYS) {
+        if (key in body) body[key] = "[REDACTED]";
+      }
+    }
+
+    return event;
+  },
+});
 
 const analyzeRoutes  = require("./routes/analyze.routes");
 const authRoutes     = require("./routes/auth.routes");

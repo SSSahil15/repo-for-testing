@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import * as Sentry from "@sentry/react";
 import { getStoredToken, clearToken, isTokenExpired, decodeJWTPayload } from "./api";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -72,6 +73,13 @@ function App() {
       };
 
       setSession({ status: "authenticated", user, accessToken: token, error: "" });
+
+      // Identify user in Sentry so all frontend errors are attributed correctly
+      Sentry.setUser({
+        id:       user.id,
+        username: user.username,
+        email:    user.email,
+      });
     }
 
     bootstrap();
@@ -79,11 +87,13 @@ function App() {
 
   function handleLogout() {
     clearToken();
+    Sentry.setUser(null);   // Clear user from Sentry scope on logout
     setSession({ status: "anonymous", user: null, accessToken: "", error: "" });
   }
 
   function handleSessionExpired(message) {
     clearToken();
+    Sentry.setUser(null);   // Clear user from Sentry scope on session expiry
     setSession({ status: "anonymous", user: null, accessToken: "", error: message || "Your session expired. Please sign in again." });
   }
 
