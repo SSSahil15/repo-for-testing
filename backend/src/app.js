@@ -114,42 +114,135 @@ app.set("trust proxy", 1);
 
 // ─── Security & Middleware ────────────────────────────────────────────────────
 
+/**
+ * Builds the CORS origin allowlist at startup.
+ * Includes hardcoded dev origins + FRONTEND_URL + any ALLOWED_ORIGINS from env.
+ * In production any *.vercel.app subdomain is also allowed (Vercel preview deploys).
+ */
+const CORS_ALLOWED_ORIGINS = new Set([
+  config.frontendUrl,
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:3000",
+  ...config.allowedOrigins,   // from ALLOWED_ORIGINS env var (custom domain, staging)
+]);
+
 app.use(
   cors({
+    /**
+     * Dynamic origin check:
+     * - No origin (curl, mobile app, server-to-server) → allowed
+     * - Exact match in allowlist → allowed
+     * - Any *.vercel.app subdomain → allowed (Vercel preview deployments)
+     * - Everything else → 403
+     */
     origin(origin, callback) {
-      const allowedOrigins = [
-        config.frontendUrl,
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:3000",
-      ];
-      // Allow requests with no origin (like mobile apps, curl)
-      // or if origin is in allowed list or is a vercel preview deployment
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+      if (
+        !origin ||
+        CORS_ALLOWED_ORIGINS.has(origin) ||
+        /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)
+      ) {
         return callback(null, true);
       }
+      logger.warn("[CORS] Rejected origin", { origin });
       return callback(new Error("Origin is not allowed by CORS."));
     },
+
+    // Required for cross-origin requests that include Authorization header or cookies
+    credentials: true,
+
+    // Explicit method list — OPTIONS handled automatically for preflight
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+
+    // Headers the browser is allowed to send
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Request-ID",
+      "X-Internal-Secret",
+    ],
+
+    // Headers the browser JS is allowed to READ from responses
+    // Without this, frontend cannot read X-Request-ID or RateLimit-* headers
+    exposedHeaders: [
+      "X-Request-ID",
+      "RateLimit-Limit",
+      "RateLimit-Remaining",
+      "RateLimit-Reset",
+      "Retry-After",
+    ],
+
+    // Cache preflight response for 24 hours — eliminates OPTIONS round-trips
+    maxAge: 86400,
   })
 );
 
 app.use(helmet({
-  crossOriginResourcePolicy: false,
+  // AI service serves JSON only — no need to restrict cross-origin resource loading
+  crossOriginResourcePolicy: { policy: "same-origin" },
+
+  /**
+   * Content Security Policy
+   * ─────────────────────────────────────────────────────────────────────────
+   * This backend serves the Swagger UI in dev only. In production all HTML
+   * is served by Vercel (frontend). The CSP here is therefore conservative
+   * and mainly protects the Swagger page and any error pages rendered.
+   *
+   * Removed 'unsafe-inline' from scriptSrc — use a nonce for Swagger UI if
+   * inline scripts are needed in future.
+   */
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https://avatars.githubusercontent.com"],
-      connectSrc: ["'self'", config.frontendUrl, config.aiServiceUrl],
-    }
+      defaultSrc:            ["'self'"],
+      scriptSrc:             ["'self'"],          // No unsafe-inline
+      styleSrc:              ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
+      imgSrc:                ["'self'", "data:", "https://avatars.githubusercontent.com"],
+      fontSrc:               ["'self'", "data:"],
+      connectSrc: [
+        "'self'",
+        config.frontendUrl,
+        config.aiServiceUrl,
+        // Sentry ingest — backend SDK sends events here
+        "https://*.ingest.sentry.io",
+        "https://*.ingest.de.sentry.io",
+      ],
+      frameSrc:              ["'none'"],          // No iframes
+      objectSrc:             ["'none'"],          // No Flash / plugins
+      baseUri:               ["'self'"],
+      formAction:            ["'self'"],
+      upgradeInsecureRequests: [],               // Upgrade HTTP → HTTPS automatically
+    },
   },
+
+  // HSTS — 1 year, include subdomains, eligible for browser preload list
   hsts: {
-    maxAge: 31536000, // 1 year
+    maxAge:            31536000,
     includeSubDomains: true,
-    preload: true,
-  }
+    preload:           true,
+  },
+
+  // Prevent browsers from MIME-sniffing responses
+  noSniff: true,
+
+  // Block page from being embedded in iframes (clickjacking protection)
+  frameguard: { action: "deny" },
+
+  // Referrer policy — send origin only, not full URL path
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+
+  // Hide Express fingerprint
+  hidePoweredBy: true,
+
+  // Disable IE-only X-XSS-Protection (modern browsers ignore it; can cause issues)
+  xssFilter: false,
 }));
+
+// Explicit Referrer-Policy header (belt + suspenders — Helmet sets it too)
+app.use((_req, res, next) => {
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 app.use(morgan(config.isProduction ? "combined" : "dev"));
 // 50 KB body cap — prevents large-payload DoS before validation runs.
 // Webhooks send compact JSON payloads; nothing legitimate needs more than this.

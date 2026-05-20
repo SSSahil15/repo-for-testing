@@ -29,6 +29,9 @@ const envSchema = z.object({
   SLOW_REQUEST_THRESHOLD_MS: z.coerce.number().int().positive().default(1000),
   GROQ_API_KEY: z.string().optional(),
   INTERNAL_SERVICE_SECRET: z.string().optional(),
+  // Comma-separated extra allowed CORS origins (e.g. custom domain, staging URL)
+  // Example: https://devpulse.com,https://staging.devpulse.com
+  ALLOWED_ORIGINS: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -61,6 +64,7 @@ console.log("[Config]   REDIS_URL:", env.REDIS_URL || "not set");
 console.log("[Config]   BACKEND_URL:", env.BACKEND_URL);
 console.log("[Config]   FRONTEND_URL:", env.FRONTEND_URL);
 console.log("[Config]   AI_SERVICE_URL:", env.AI_SERVICE_URL);
+console.log("[Config]   ALLOWED_ORIGINS:", env.ALLOWED_ORIGINS || "none");
 
 module.exports = {
   backendUrl: env.BACKEND_URL,
@@ -89,4 +93,9 @@ module.exports = {
   slowRequestThresholdMs: env.SLOW_REQUEST_THRESHOLD_MS,
   groqApiKey: env.GROQ_API_KEY,
   internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
+  // Parse comma-separated ALLOWED_ORIGINS into an array (trimmed, non-empty)
+  allowedOrigins: (env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 };

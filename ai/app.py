@@ -8,6 +8,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from services.predictor import FailurePredictor
 
@@ -66,6 +67,36 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="DevPulse AI Service", lifespan=lifespan)
 predictor = FailurePredictor()
+
+# ─── CORS ──────────────────────────────────────────────────────────────────────────
+#
+# The AI service is an INTERNAL service — it should only be called by the
+# backend. In production we lock CORS to the backend URL only, completely
+# preventing any browser (or external script) from calling AI endpoints directly.
+#
+# In development we allow all origins so curl / Swagger UI / frontend dev
+# servers can reach the AI without extra config.
+#
+_BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:4000")
+_CORS_ORIGINS = (
+    [_BACKEND_URL]
+    if _IS_PROD
+    else ["*"]   # permissive in dev / test
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=False,    # AI service doesn’t use cookies
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "X-Request-ID",         # forwarded from backend for distributed tracing
+        "X-Internal-Secret",    # service-to-service auth header
+        "sentry-trace",         # Sentry distributed tracing
+        "baggage",              # Sentry distributed tracing
+    ],
+)
 
 # ─── Models ───────────────────────────────────────────────────────────────────
 
