@@ -31,7 +31,7 @@ export default defineConfig({
 
   use: {
     // Base URL — override with E2E_BASE_URL env var in CI
-    baseURL: process.env.E2E_BASE_URL || "http://localhost:5173",
+    baseURL: process.env.E2E_BASE_URL || "http://localhost:5174",
 
     // Collect trace on first retry to diagnose failures
     trace: "on-first-retry",
@@ -50,17 +50,12 @@ export default defineConfig({
     },
   ],
 
-  // Start the frontend dev server automatically when running locally
-  // In CI, the server must already be running (handled by the workflow)
-  ...(process.env.CI
-    ? {}
-    : {
-        webServer: {
-          command: "npm run dev",
-          cwd:     "./frontend",
-          url:     "http://localhost:5173",
-          reuseExistingServer: true,
-          timeout: 30 * 1000,
-        },
-      }),
+  // Start the frontend dev server automatically if no E2E_BASE_URL is specified
+  webServer: {
+    command: "npm run dev",
+    cwd:     "./frontend",
+    url:     "http://localhost:5174",
+    reuseExistingServer: !process.env.CI,
+    timeout: 60 * 1000,
+  },
 });

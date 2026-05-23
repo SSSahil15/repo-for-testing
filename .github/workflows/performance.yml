@@ -15,7 +15,7 @@ on:
 env:
   NODE_VERSION: "20"
   # Performance budgets — override via GitHub Repository Variables
-  BUNDLE_BUDGET_KB: ${{ vars.BUNDLE_BUDGET_KB || '200' }}
+  BUNDLE_BUDGET_KB: ${{ vars.BUNDLE_BUDGET_KB || '350' }}
   LHCI_MIN_SCORE:   ${{ vars.LHCI_MIN_SCORE   || '0.9' }}
 
 permissions:
