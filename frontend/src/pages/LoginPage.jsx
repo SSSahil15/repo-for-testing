@@ -317,7 +317,7 @@ function LoginPageContent({ isLoading, setIsLoading, authError, sessionError }) 
               disabled={isLoading}
               className="group relative flex items-center justify-center gap-3 font-bold text-base px-8 py-4 rounded-xl active:scale-95 disabled:opacity-60 text-white overflow-hidden bg-blue-600 hover:bg-blue-500 transition-colors shadow-[0_0_30px_rgba(37,99,235,0.4)] w-full sm:w-auto"
             >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Github className="w-5 h-5" />}
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <GithubIcon className="w-5 h-5" />}
               {isLoading ? "Redirecting..." : "Connect GitHub"}
               {!isLoading && <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
             </button>
@@ -348,7 +348,7 @@ function LoginPageContent({ isLoading, setIsLoading, authError, sessionError }) 
           <div className="max-w-5xl mx-auto px-6 flex flex-wrap justify-center gap-6 md:gap-16 items-center text-slate-500 font-semibold text-sm">
             <div className="flex items-center gap-2"><Database className="w-4 h-4 text-emerald-400" /> 10K+ Scans Analyzed</div>
             <div className="flex items-center gap-2"><Target className="w-4 h-4 text-blue-400" /> 98.2% Detection Accuracy</div>
-            <div className="flex items-center gap-2"><Github className="w-4 h-4 text-white" /> Native Integrations</div>
+            <div className="flex items-center gap-2"><GithubIcon className="w-4 h-4 text-white" /> Native Integrations</div>
           </div>
         </section>
 
@@ -441,7 +441,7 @@ function LoginPageContent({ isLoading, setIsLoading, authError, sessionError }) 
             </p>
             <div className="flex gap-4">
               <a href="#" className="text-slate-500 hover:text-white transition-colors"><TwitterIcon className="w-5 h-5" /></a>
-              <a href="#" className="text-slate-500 hover:text-white transition-colors"><Github className="w-5 h-5" /></a>
+              <a href="#" className="text-slate-500 hover:text-white transition-colors"><GithubIcon className="w-5 h-5" /></a>
               <a href="#" className="text-slate-500 hover:text-white transition-colors"><DiscordIcon className="w-5 h-5" /></a>
             </div>
           </div>
