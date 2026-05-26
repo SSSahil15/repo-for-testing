@@ -127,7 +127,18 @@ function InteractiveAIDemo() {
 }
 
 // 2. Dashboard Visual Mockup
+const MOCK_TABS = ["Overview", "Repositories", "Vulnerabilities", "AI Copilot"];
+
 function DashboardMockup() {
+  const [activeTab, setActiveTab] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveTab((prev) => (prev + 1) % MOCK_TABS.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="w-full max-w-5xl mx-auto mt-8 relative" style={{ perspective: "2000px" }}>
       <div className="absolute inset-0 bg-gradient-to-t from-[#080b14] via-transparent to-transparent z-10 top-[40%] pointer-events-none" />
@@ -148,10 +159,18 @@ function DashboardMockup() {
               <span className="font-bold text-white tracking-tight">DevPulse</span>
             </div>
             <div className="flex flex-col gap-2">
-              <div className="h-8 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center px-3 text-blue-400 text-xs font-semibold">Overview</div>
-              <div className="h-8 rounded-lg flex items-center px-3 text-slate-500 text-xs">Repositories</div>
-              <div className="h-8 rounded-lg flex items-center px-3 text-slate-500 text-xs">Vulnerabilities</div>
-              <div className="h-8 rounded-lg flex items-center px-3 text-slate-500 text-xs">AI Copilot</div>
+              {MOCK_TABS.map((tab, idx) => (
+                <div 
+                  key={tab}
+                  className={`h-8 rounded-lg flex items-center px-3 text-xs transition-all duration-500 ${
+                    activeTab === idx 
+                      ? "bg-blue-500/10 border border-blue-500/20 text-blue-400 font-semibold scale-105 origin-left shadow-lg shadow-blue-500/10" 
+                      : "text-slate-500 border border-transparent"
+                  }`}
+                >
+                  {tab}
+                </div>
+              ))}
             </div>
           </div>
           
