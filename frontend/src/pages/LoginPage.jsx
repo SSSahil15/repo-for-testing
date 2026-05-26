@@ -128,15 +128,34 @@ function InteractiveAIDemo() {
 
 // 2. Dashboard Visual Mockup
 const MOCK_TABS = ["Overview", "Repositories", "Vulnerabilities", "AI Copilot"];
+const COPILOT_MESSAGES = [
+  "System baseline normal. Monitoring active deployments.",
+  "Analyzing new commit in 'frontend' repository...",
+  "Alert: Prototype pollution detected in frontend. Want me to patch it?",
+  "Generating fix... PR #142 created. Awaiting approval."
+];
 
 function DashboardMockup() {
   const [activeTab, setActiveTab] = useState(0);
+  const [riskScore, setRiskScore] = useState(72);
+  const [scanned, setScanned] = useState(1248);
+  const [cves, setCves] = useState(14);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const tabInterval = setInterval(() => {
       setActiveTab((prev) => (prev + 1) % MOCK_TABS.length);
-    }, 2500);
-    return () => clearInterval(interval);
+    }, 3000);
+    
+    const dataInterval = setInterval(() => {
+      setRiskScore(prev => Math.max(0, Math.min(100, prev + (Math.floor(Math.random() * 3) - 1))));
+      setScanned(prev => prev + Math.floor(Math.random() * 5));
+      setCves(prev => Math.max(0, prev + (Math.random() > 0.8 ? (Math.floor(Math.random() * 3) - 1) : 0)));
+    }, 1500);
+    
+    return () => {
+      clearInterval(tabInterval);
+      clearInterval(dataInterval);
+    };
   }, []);
 
   return (
@@ -190,17 +209,17 @@ function DashboardMockup() {
              <div className="grid grid-cols-3 gap-3">
                 <div className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
                    <div className="text-slate-400 text-xs mb-1">Risk Score</div>
-                   <div className="text-2xl font-black text-red-400">72</div>
+                   <div className="text-2xl font-black text-red-400">{riskScore}</div>
                    <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-red-500/10 rounded-full blur-xl" />
                 </div>
                 <div className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
                    <div className="text-slate-400 text-xs mb-1">Scanned</div>
-                   <div className="text-2xl font-black text-white">1,248</div>
+                   <div className="text-2xl font-black text-white">{scanned.toLocaleString()}</div>
                    <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-blue-500/10 rounded-full blur-xl" />
                 </div>
                 <div className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
                    <div className="text-slate-400 text-xs mb-1">Critical CVEs</div>
-                   <div className="text-2xl font-black text-orange-400">14</div>
+                   <div className="text-2xl font-black text-orange-400">{cves}</div>
                    <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-orange-500/10 rounded-full blur-xl" />
                 </div>
              </div>
@@ -258,17 +277,19 @@ function DashboardMockup() {
              </div>
              
              {/* Floating AI Copilot Widget */}
-             <div className="absolute bottom-6 right-6 w-64 bg-[#0d1117]/90 backdrop-blur-md border border-blue-500/30 rounded-2xl p-3 shadow-2xl shadow-blue-500/20">
+             <div className="absolute bottom-6 right-6 w-64 bg-[#0d1117]/90 backdrop-blur-md border border-blue-500/30 rounded-2xl p-3 shadow-2xl shadow-blue-500/20 transition-all duration-300">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-5 h-5 rounded bg-blue-500 flex items-center justify-center"><Zap className="w-3 h-3 text-white" /></div>
                   <div className="text-xs font-bold text-white">AI Copilot</div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-2 text-[10px] text-slate-300 leading-relaxed border border-white/5">
-                  I found a prototype pollution vulnerability in your frontend. Want me to generate a PR to patch it?
+                <div className="bg-white/5 rounded-lg p-2 text-[10px] text-slate-300 leading-relaxed border border-white/5 h-12 flex items-center overflow-hidden">
+                  <div key={activeTab} className="animate-fade-in">{COPILOT_MESSAGES[activeTab]}</div>
                 </div>
-                <div className="mt-2 bg-blue-500 text-white text-[10px] font-bold py-1.5 rounded flex justify-center cursor-pointer">
-                  Generate Fix
-                </div>
+                {activeTab === 2 && (
+                  <div className="mt-2 bg-blue-500 hover:bg-blue-400 transition-colors text-white text-[10px] font-bold py-1.5 rounded flex justify-center cursor-pointer animate-fade-in shadow-lg shadow-blue-500/20">
+                    Generate Fix
+                  </div>
+                )}
              </div>
           </div>
         </div>
