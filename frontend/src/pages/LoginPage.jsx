@@ -158,6 +158,45 @@ function DashboardMockup() {
     };
   }, []);
 
+  const TAB_CONTENT = [
+    {
+      title: "Deployment Analytics",
+      desc: "Live security and operational signals.",
+      stats: [
+        { label: "Risk Score", value: riskScore, color: "text-red-400", bg: "bg-red-500/10" },
+        { label: "Scanned", value: scanned.toLocaleString(), color: "text-white", bg: "bg-blue-500/10" },
+        { label: "Critical CVEs", value: cves, color: "text-orange-400", bg: "bg-orange-500/10" },
+      ],
+    },
+    {
+      title: "Active Repositories",
+      desc: "Synced from GitHub organization.",
+      stats: [
+        { label: "Monitored", value: "42", color: "text-emerald-400", bg: "bg-emerald-500/10" },
+        { label: "Outdated", value: "8", color: "text-orange-400", bg: "bg-orange-500/10" },
+        { label: "PRs Pending", value: "3", color: "text-blue-400", bg: "bg-blue-500/10" },
+      ],
+    },
+    {
+      title: "Security Posture",
+      desc: "Open issues and patch status.",
+      stats: [
+        { label: "Critical", value: cves, color: "text-red-400", bg: "bg-red-500/10" },
+        { label: "High", value: "24", color: "text-orange-400", bg: "bg-orange-500/10" },
+        { label: "Medium", value: "89", color: "text-yellow-400", bg: "bg-yellow-500/10" },
+      ],
+    },
+    {
+      title: "Copilot Activity",
+      desc: "Auto-fixes and intelligent monitoring.",
+      stats: [
+        { label: "Auto-fixed", value: "1,024", color: "text-blue-400", bg: "bg-blue-500/10" },
+        { label: "Active Agents", value: "3", color: "text-purple-400", bg: "bg-purple-500/10" },
+        { label: "Lines Scanned", value: "2.4M", color: "text-emerald-400", bg: "bg-emerald-500/10" },
+      ],
+    }
+  ];
+
   return (
     <div className="w-full max-w-5xl mx-auto mt-8 relative" style={{ perspective: "2000px" }}>
       <div className="absolute inset-0 bg-gradient-to-t from-[#080b14] via-transparent to-transparent z-10 top-[40%] pointer-events-none" />
@@ -197,8 +236,8 @@ function DashboardMockup() {
           <div className="flex-1 p-6 flex flex-col gap-6 relative">
              <div className="flex justify-between items-start">
                <div>
-                 <h2 className="text-xl font-bold text-white mb-1">Deployment Analytics</h2>
-                 <p className="text-slate-400 text-xs">Live security and operational signals.</p>
+                 <h2 className="text-xl font-bold text-white mb-1 transition-all">{TAB_CONTENT[activeTab].title}</h2>
+                 <p className="text-slate-400 text-xs transition-all">{TAB_CONTENT[activeTab].desc}</p>
                </div>
                <div className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs font-bold border border-emerald-500/20 flex items-center gap-1.5">
                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" /> System Healthy
@@ -207,21 +246,13 @@ function DashboardMockup() {
              
              {/* Stats Row */}
              <div className="grid grid-cols-3 gap-3">
-                <div className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
-                   <div className="text-slate-400 text-xs mb-1">Risk Score</div>
-                   <div className="text-2xl font-black text-red-400">{riskScore}</div>
-                   <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-red-500/10 rounded-full blur-xl" />
-                </div>
-                <div className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
-                   <div className="text-slate-400 text-xs mb-1">Scanned</div>
-                   <div className="text-2xl font-black text-white">{scanned.toLocaleString()}</div>
-                   <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-blue-500/10 rounded-full blur-xl" />
-                </div>
-                <div className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
-                   <div className="text-slate-400 text-xs mb-1">Critical CVEs</div>
-                   <div className="text-2xl font-black text-orange-400">{cves}</div>
-                   <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-orange-500/10 rounded-full blur-xl" />
-                </div>
+                {TAB_CONTENT[activeTab].stats.map((stat, idx) => (
+                  <div key={idx} className="h-24 bg-white/5 rounded-xl border border-white/5 p-4 flex flex-col justify-center relative overflow-hidden">
+                     <div className="text-slate-400 text-xs mb-1">{stat.label}</div>
+                     <div className={`text-2xl font-black ${stat.color} animate-fade-in`}>{stat.value}</div>
+                     <div className={`absolute -right-4 -bottom-4 w-20 h-20 rounded-full blur-xl ${stat.bg}`} />
+                  </div>
+                ))}
              </div>
 
              {/* Main Chart Area */}
