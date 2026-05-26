@@ -167,12 +167,38 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 
 ## ☁️ Cloud Deployment
 
-Since DevPulse is entirely containerized via Docker Compose, deployment to any VPS (AWS EC2, DigitalOcean Droplet, Hetzner) is extremely straightforward.
+Since DevPulse is entirely containerized, deployment to any VPS (AWS EC2, DigitalOcean, Hetzner) or container platform (Render, Railway) is extremely straightforward.
 
-1. Provision a Linux server with Docker installed.
-2. Clone the repository and configure your `.env` files with production secrets.
-3. Start the containers using `docker compose up -d`.
-4. (Optional) Set up an NGINX reverse proxy or Traefik container to handle SSL/TLS termination and route traffic to the respective internal Docker ports (`4000` for backend, `5174` for frontend, `3001` for Grafana).
+If you are deploying the **Frontend** to Vercel and the **Backend/AI** to Render (using their Docker support):
+
+1. Set `VITE_API_URL` in Vercel to your deployed backend URL.
+2. In your GitHub OAuth App, set the production callback URL to:
+   ```text
+   https://your-backend.onrender.com/auth/github/callback
+   ```
+
+**Required Production Backend Variables:**
+```env
+NODE_ENV=production
+BACKEND_URL=https://your-backend.onrender.com
+FRONTEND_URL=https://your-frontend.vercel.app
+AI_SERVICE_URL=https://your-ai-service.onrender.com
+
+# Managed Database Connections
+DATABASE_URL=postgresql://user:password@host:5432/devpulse
+REDIS_URL=redis://default:password@host:6379
+
+# GitHub OAuth App credentials
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+
+# Secrets
+TOKEN_ENCRYPTION_SECRET=generate-a-64-char-secret
+JWT_SECRET=generate-a-secure-random-string-min-32-chars
+
+# AI Integration
+GROQ_API_KEY=your-groq-api-key
+```
 
 ---
 
