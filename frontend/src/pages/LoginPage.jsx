@@ -162,6 +162,11 @@ function DashboardMockup() {
     {
       title: "Deployment Analytics",
       desc: "Live security and operational signals.",
+      chartTitle: "Vulnerability Trend",
+      paths: {
+        redFill: "M0,100 L0,60 Q25,30 50,60 T100,60 L100,100 Z", redStroke: "M0,60 Q25,30 50,60 T100,60",
+        blueFill: "M0,100 L0,40 Q25,80 50,40 T100,40 L100,100 Z", blueStroke: "M0,40 Q25,80 50,40 T100,40"
+      },
       stats: [
         { label: "Risk Score", value: riskScore, color: "text-red-400", bg: "bg-red-500/10" },
         { label: "Scanned", value: scanned.toLocaleString(), color: "text-white", bg: "bg-blue-500/10" },
@@ -171,6 +176,11 @@ function DashboardMockup() {
     {
       title: "Active Repositories",
       desc: "Synced from GitHub organization.",
+      chartTitle: "Scan Velocity",
+      paths: {
+        redFill: "M0,100 L0,50 Q25,10 50,50 T100,50 L100,100 Z", redStroke: "M0,50 Q25,10 50,50 T100,50",
+        blueFill: "M0,100 L0,50 Q25,90 50,50 T100,50 L100,100 Z", blueStroke: "M0,50 Q25,90 50,50 T100,50"
+      },
       stats: [
         { label: "Monitored", value: "42", color: "text-emerald-400", bg: "bg-emerald-500/10" },
         { label: "Outdated", value: "8", color: "text-orange-400", bg: "bg-orange-500/10" },
@@ -180,6 +190,11 @@ function DashboardMockup() {
     {
       title: "Security Posture",
       desc: "Open issues and patch status.",
+      chartTitle: "Critical Issues Timeline",
+      paths: {
+        redFill: "M0,100 L0,70 Q25,40 50,70 T100,70 L100,100 Z", redStroke: "M0,70 Q25,40 50,70 T100,70",
+        blueFill: "M0,100 L0,30 Q25,60 50,30 T100,30 L100,100 Z", blueStroke: "M0,30 Q25,60 50,30 T100,30"
+      },
       stats: [
         { label: "Critical", value: cves, color: "text-red-400", bg: "bg-red-500/10" },
         { label: "High", value: "24", color: "text-orange-400", bg: "bg-orange-500/10" },
@@ -189,6 +204,11 @@ function DashboardMockup() {
     {
       title: "Copilot Activity",
       desc: "Auto-fixes and intelligent monitoring.",
+      chartTitle: "Agent Actions Timeline",
+      paths: {
+        redFill: "M0,100 L0,55 Q25,35 50,55 T100,55 L100,100 Z", redStroke: "M0,55 Q25,35 50,55 T100,55",
+        blueFill: "M0,100 L0,45 Q25,65 50,45 T100,45 L100,100 Z", blueStroke: "M0,45 Q25,65 50,45 T100,45"
+      },
       stats: [
         { label: "Auto-fixed", value: "1,024", color: "text-blue-400", bg: "bg-blue-500/10" },
         { label: "Active Agents", value: "3", color: "text-purple-400", bg: "bg-purple-500/10" },
@@ -258,7 +278,7 @@ function DashboardMockup() {
              {/* Main Chart Area */}
              <div className="flex-1 bg-white/5 rounded-xl border border-white/5 p-4 relative overflow-hidden flex flex-col">
                 <div className="flex justify-between items-center mb-4">
-                  <div className="text-xs font-semibold text-slate-300">Vulnerability Trend</div>
+                  <div className="text-xs font-semibold text-slate-300 transition-all">{TAB_CONTENT[activeTab].chartTitle}</div>
                   <div className="flex gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
@@ -278,7 +298,7 @@ function DashboardMockup() {
                 <div className="flex-1 relative w-full h-full opacity-60 overflow-hidden">
                   <div className="absolute inset-0 w-[200%] h-full flex animate-flow">
                     {/* First Copy */}
-                    <svg className="w-1/2 h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                    <svg className="w-1/2 h-full transition-all duration-700" preserveAspectRatio="none" viewBox="0 0 100 100">
                       <defs>
                         <linearGradient id="gradient-red" x1="0" x2="0" y1="0" y2="1">
                           <stop offset="0%" stopColor="rgba(248,113,113,0.2)" />
@@ -289,19 +309,19 @@ function DashboardMockup() {
                           <stop offset="100%" stopColor="rgba(59,130,246,0)" />
                         </linearGradient>
                       </defs>
-                      <path d="M0,100 L0,60 Q25,30 50,60 T100,60 L100,100 Z" fill="url(#gradient-red)" />
-                      <path d="M0,60 Q25,30 50,60 T100,60" fill="none" stroke="#f87171" strokeWidth="1.5" />
+                      <path d={TAB_CONTENT[activeTab].paths.redFill} fill="url(#gradient-red)" className="transition-all duration-700" />
+                      <path d={TAB_CONTENT[activeTab].paths.redStroke} fill="none" stroke="#f87171" strokeWidth="1.5" className="transition-all duration-700" />
                       
-                      <path d="M0,100 L0,40 Q25,80 50,40 T100,40 L100,100 Z" fill="url(#gradient-blue)" />
-                      <path d="M0,40 Q25,80 50,40 T100,40" fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                      <path d={TAB_CONTENT[activeTab].paths.blueFill} fill="url(#gradient-blue)" className="transition-all duration-700" />
+                      <path d={TAB_CONTENT[activeTab].paths.blueStroke} fill="none" stroke="#3b82f6" strokeWidth="1.5" className="transition-all duration-700" />
                     </svg>
                     {/* Second Copy for looping */}
-                    <svg className="w-1/2 h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                      <path d="M0,100 L0,60 Q25,30 50,60 T100,60 L100,100 Z" fill="url(#gradient-red)" />
-                      <path d="M0,60 Q25,30 50,60 T100,60" fill="none" stroke="#f87171" strokeWidth="1.5" />
+                    <svg className="w-1/2 h-full transition-all duration-700" preserveAspectRatio="none" viewBox="0 0 100 100">
+                      <path d={TAB_CONTENT[activeTab].paths.redFill} fill="url(#gradient-red)" className="transition-all duration-700" />
+                      <path d={TAB_CONTENT[activeTab].paths.redStroke} fill="none" stroke="#f87171" strokeWidth="1.5" className="transition-all duration-700" />
                       
-                      <path d="M0,100 L0,40 Q25,80 50,40 T100,40 L100,100 Z" fill="url(#gradient-blue)" />
-                      <path d="M0,40 Q25,80 50,40 T100,40" fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                      <path d={TAB_CONTENT[activeTab].paths.blueFill} fill="url(#gradient-blue)" className="transition-all duration-700" />
+                      <path d={TAB_CONTENT[activeTab].paths.blueStroke} fill="none" stroke="#3b82f6" strokeWidth="1.5" className="transition-all duration-700" />
                     </svg>
                   </div>
                 </div>
