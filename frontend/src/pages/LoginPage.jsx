@@ -196,26 +196,45 @@ function DashboardMockup() {
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   </div>
                 </div>
-                {/* Fake Chart Lines */}
-                <div className="flex-1 relative w-full h-full opacity-60">
-                  <svg className="w-full h-full absolute bottom-0 left-0" preserveAspectRatio="none" viewBox="0 0 100 100">
-                    <path d="M0,100 L0,50 Q25,30 50,60 T100,20 L100,100 Z" fill="url(#gradient-red)" />
-                    <path d="M0,50 Q25,30 50,60 T100,20" fill="none" stroke="#f87171" strokeWidth="1.5" />
-                    
-                    <path d="M0,100 L0,70 Q25,80 50,50 T100,40 L100,100 Z" fill="url(#gradient-blue)" />
-                    <path d="M0,70 Q25,80 50,50 T100,40" fill="none" stroke="#3b82f6" strokeWidth="1.5" />
-
-                    <defs>
-                      <linearGradient id="gradient-red" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(248,113,113,0.2)" />
-                        <stop offset="100%" stopColor="rgba(248,113,113,0)" />
-                      </linearGradient>
-                      <linearGradient id="gradient-blue" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(59,130,246,0.2)" />
-                        <stop offset="100%" stopColor="rgba(59,130,246,0)" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
+                {/* Fake Chart Lines (Animated Flow) */}
+                <style>{`
+                  @keyframes flow {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-50%); }
+                  }
+                  .animate-flow {
+                    animation: flow 3s linear infinite;
+                  }
+                `}</style>
+                <div className="flex-1 relative w-full h-full opacity-60 overflow-hidden">
+                  <div className="absolute inset-0 w-[200%] h-full flex animate-flow">
+                    {/* First Copy */}
+                    <svg className="w-1/2 h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                      <defs>
+                        <linearGradient id="gradient-red" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(248,113,113,0.2)" />
+                          <stop offset="100%" stopColor="rgba(248,113,113,0)" />
+                        </linearGradient>
+                        <linearGradient id="gradient-blue" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(59,130,246,0.2)" />
+                          <stop offset="100%" stopColor="rgba(59,130,246,0)" />
+                        </linearGradient>
+                      </defs>
+                      <path d="M0,100 L0,60 Q25,30 50,60 T100,60 L100,100 Z" fill="url(#gradient-red)" />
+                      <path d="M0,60 Q25,30 50,60 T100,60" fill="none" stroke="#f87171" strokeWidth="1.5" />
+                      
+                      <path d="M0,100 L0,40 Q25,80 50,40 T100,40 L100,100 Z" fill="url(#gradient-blue)" />
+                      <path d="M0,40 Q25,80 50,40 T100,40" fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                    </svg>
+                    {/* Second Copy for looping */}
+                    <svg className="w-1/2 h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                      <path d="M0,100 L0,60 Q25,30 50,60 T100,60 L100,100 Z" fill="url(#gradient-red)" />
+                      <path d="M0,60 Q25,30 50,60 T100,60" fill="none" stroke="#f87171" strokeWidth="1.5" />
+                      
+                      <path d="M0,100 L0,40 Q25,80 50,40 T100,40 L100,100 Z" fill="url(#gradient-blue)" />
+                      <path d="M0,40 Q25,80 50,40 T100,40" fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                    </svg>
+                  </div>
                 </div>
              </div>
              
