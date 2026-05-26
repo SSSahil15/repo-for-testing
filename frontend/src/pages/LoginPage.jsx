@@ -143,8 +143,8 @@ function DashboardMockup() {
         <div className="w-full h-[350px] sm:h-[450px] rounded-2xl bg-[#080b14] border border-white/5 overflow-hidden flex relative select-none">
           {/* Sidebar */}
           <div className="hidden sm:flex w-56 border-r border-white/5 p-4 flex-col gap-6 bg-white/[0.01]">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.5)]"><Zap className="w-4 h-4 text-white" /></div>
+            <div className="flex items-center gap-2 mb-6">
+              <img src="/Logo.png" alt="DevPulse Logo" className="w-5 h-5 object-contain" />
               <span className="font-bold text-white tracking-tight">DevPulse</span>
             </div>
             <div className="flex flex-col gap-2">
@@ -267,9 +267,7 @@ function LoginPageContent({ isLoading, setIsLoading, authError, sessionError }) 
       {/* SaaS Navbar */}
       <nav className="relative z-20 flex items-center justify-between px-6 lg:px-12 py-4 border-b border-white/5 bg-[#080b14]/80 backdrop-blur-md sticky top-0">
         <div className="flex items-center gap-3 cursor-pointer">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden shrink-0 bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/20">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
+          <img src="/Logo.png" alt="DevPulse Logo" className="w-8 h-8 object-contain" />
           <span className="text-xl font-black tracking-tight text-white">DevPulse</span>
         </div>
 
@@ -432,9 +430,9 @@ function LoginPageContent({ isLoading, setIsLoading, authError, sessionError }) 
       <footer className="relative z-10 bg-[#06080d] border-t border-white/5 pt-16 pb-8">
         <div className="max-w-5xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="col-span-1 md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center"><Zap className="w-4 h-4 text-white" /></div>
-              <span className="text-lg font-black text-white">DevPulse</span>
+            <div className="flex items-center gap-2 cursor-pointer">
+              <img src="/Logo.png" alt="DevPulse Logo" className="w-8 h-8 object-contain" />
+              <span className="text-xl font-black tracking-tight text-white">DevPulse</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed mb-6 pr-4">
               The AI-powered DevSecOps platform for modern engineering teams. Ship faster, securely.
