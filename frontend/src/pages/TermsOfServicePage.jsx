@@ -126,7 +126,7 @@ const TermsOfServicePage = () => {
           
           {/* Sidebar Navigation (Sticky) */}
           <div className="hidden lg:block w-72 shrink-0 sticky top-32">
-            <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 rounded-3xl p-6">
+            <div className="bg-[#0d1117] border border-white/10 rounded-3xl p-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-6">Navigation</h3>
               <nav className="space-y-1">
                 {sections.map((section) => (
@@ -159,7 +159,7 @@ const TermsOfServicePage = () => {
                   <Scale className="w-4 h-4 text-indigo-400" />
                   Legal Agreement
                 </div>
-                <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-6">
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight mb-6">
                   Terms of Service
                 </h1>
                 <p className="text-lg text-slate-400 max-w-2xl">
@@ -180,10 +180,10 @@ const TermsOfServicePage = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-100px" }}
                   transition={{ duration: 0.5, delay: 0.1 }}
-                  className="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-3xl p-8 hover:border-slate-700 transition-colors scroll-mt-32"
+                  className="bg-[#0d1117] border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-colors scroll-mt-32"
                 >
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="p-3 bg-slate-800 rounded-xl shadow-inner border border-slate-700/50">
+                    <div className="p-3 bg-white/5 rounded-xl shadow-inner border border-white/5">
                       {section.icon}
                     </div>
                     <h2 className="text-2xl font-bold text-white">

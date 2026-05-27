@@ -198,6 +198,38 @@
   line-height: 1.75;
 }
 
+.prose-custom ul > li {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+/* Custom Scrollbar for Docs */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Shiki Styles Override */
+.shiki-container pre {
+  margin: 0 !important;
+  background: transparent !important;
+}
+.shiki-container code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 /* Premium Motion System */
 .motion-transition {
   transition: all .28s cubic-bezier(.4,0,.2,1);

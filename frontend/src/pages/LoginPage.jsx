@@ -21,8 +21,8 @@ const Typewriter = ({ text }) => {
   return <span>{displayed}</span>;
 };
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-import { GithubIcon, TwitterIcon, DiscordIcon } from '../components/icons';
+const BACKEND_URL = import.meta.env.VITE_API_URL || '';
+import { GithubIcon, LinkedinIcon, DiscordIcon } from '../components/icons';
 
 const STAT_CARDS = [
   { label: "Risk Score",           value: 72,  suffix: "", color: "text-red-400",    bg: "bg-red-500/10",    border: "border-red-500/20",    trend: "↑ +4 today", trendColor: "text-red-400" },
@@ -491,11 +491,11 @@ export default function LoginPage({ sessionError }) {
         </div>
 
         <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-300">
-          <a href="#features" className="hover:text-white transition-colors">Features</a>
-          <a href="#security" className="hover:text-white transition-colors">Security</a>
+          <a href="/features" className="hover:text-white transition-colors">Features</a>
+          <a href="/security" className="hover:text-white transition-colors">Security</a>
           <a href="/docs" className="hover:text-white transition-colors">Docs</a>
           <a href="/reference" className="hover:text-white transition-colors">API</a>
-          <a href="https://github.com/SSSahil15/repo-for-testing" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-white transition-colors"><GithubIcon className="w-4 h-4"/> GitHub</a>
+          <a href="https://github.com/SSSahil15/DevPulse" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:text-white transition-colors"><GithubIcon className="w-4 h-4"/> GitHub</a>
         </div>
 
         <div className="flex items-center gap-4">
@@ -672,17 +672,17 @@ export default function LoginPage({ sessionError }) {
               The AI-powered DevSecOps platform for modern engineering teams. Ship faster, securely.
             </p>
             <div className="flex gap-4">
-              <a href="https://twitter.com" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><TwitterIcon className="w-5 h-5" /></a>
-              <a href="https://github.com/SSSahil15/repo-for-testing" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><GithubIcon className="w-5 h-5" /></a>
-              <a href="https://discord.com" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><DiscordIcon className="w-5 h-5" /></a>
+              <a href="https://www.linkedin.com/in/-sahil/" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><LinkedinIcon className="w-5 h-5" /></a>
+              <a href="https://github.com/SSSahil15/DevPulse" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><GithubIcon className="w-5 h-5" /></a>
+              <a href="https://discord.gg/95NY3xxx8X" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><DiscordIcon className="w-5 h-5" /></a>
             </div>
           </div>
           
           <div>
             <h4 className="font-bold text-white mb-4">Product</h4>
             <ul className="space-y-3 text-sm text-slate-400">
-              <li><a href="#features" className="hover:text-blue-400 transition-colors">Features</a></li>
-              <li><a href="#security" className="hover:text-blue-400 transition-colors">Security</a></li>
+              <li><a href="/features" className="hover:text-blue-400 transition-colors">Features</a></li>
+              <li><a href="/security" className="hover:text-blue-400 transition-colors">Security</a></li>
               <li><a href="/changelog" className="hover:text-blue-400 transition-colors">Changelog</a></li>
             </ul>
           </div>
@@ -694,13 +694,15 @@ export default function LoginPage({ sessionError }) {
               <li><a href="/reference" className="hover:text-blue-400 transition-colors">API Reference</a></li>
               <li><a href="/blog" className="hover:text-blue-400 transition-colors">Blog</a></li>
               <li><a href="/community" className="hover:text-blue-400 transition-colors">Community</a></li>
+              <li><a href="/contributing" className="hover:text-blue-400 transition-colors">Contributing</a></li>
+              <li><a href="/openapi.yaml" download="openapi.yaml" className="hover:text-blue-400 transition-colors">Download OpenAPI Spec</a></li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-bold text-white mb-4">Company</h4>
             <ul className="space-y-3 text-sm text-slate-400">
-              <li><a href="#about" className="hover:text-blue-400 transition-colors">About Us</a></li>
+              <li><a href="/about" className="hover:text-blue-400 transition-colors">About Us</a></li>
               <li><a href="/contact" className="hover:text-blue-400 transition-colors">Contact</a></li>
               <li><a href="/privacy" className="hover:text-blue-400 transition-colors">Privacy Policy</a></li>
               <li><a href="/terms" className="hover:text-blue-400 transition-colors">Terms of Service</a></li>

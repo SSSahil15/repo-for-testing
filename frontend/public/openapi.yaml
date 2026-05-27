@@ -199,6 +199,9 @@ paths:
                 repositoryFullName:
                   type: string
                   example: SSSahil15/DevPulse
+                repoUrl:
+                  type: string
+                  example: https://github.com/SSSahil15/DevPulse
       responses:
         '202':
           description: Scan job accepted.

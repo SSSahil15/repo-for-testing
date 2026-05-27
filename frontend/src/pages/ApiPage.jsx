@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Menu, X, Copy, Check, ChevronRight, Code2, Shield, Activity, GitBranch, Terminal, ArrowLeft, Radio } from 'lucide-react';
+import { GithubIcon as Github, LinkedinIcon, DiscordIcon } from '../components/icons';
 
 const CodeBlock = ({ code, language = 'json', title }) => {
   const [copied, setCopied] = useState(false);
@@ -87,14 +88,14 @@ const API_SECTIONS = [
     title: 'Authentication',
     content: (
       <div className="animate-in fade-in duration-500">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-6">Authentication</h1>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-6">Authentication</h1>
         <p className="text-slate-400 text-lg mb-12 max-w-2xl">
           All endpoints are authenticated using Bearer tokens. You can obtain a token by exchanging a GitHub OAuth code.
         </p>
         
         <EndpointBlock 
           method="POST"
-          path="/api/v1/auth/github"
+          path="/v1/auth/github"
           description="Exchange a GitHub OAuth code for a DevPulse access token and refresh token."
           requestData={`{\n  "code": "gho_xxxxxxxxxxxxxxx"\n}`}
           responseData={`{\n  "access_token": "dp_live_xxx",\n  "expires_in": 3600,\n  "user": {\n    "id": "12345",\n    "login": "octocat"\n  }\n}`}
@@ -108,21 +109,21 @@ const API_SECTIONS = [
     title: 'Repositories',
     content: (
       <div className="animate-in fade-in duration-500">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-6">Repositories</h1>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-6">Repositories</h1>
         <p className="text-slate-400 text-lg mb-12 max-w-2xl">
           Manage and list connected GitHub repositories that DevPulse is actively monitoring.
         </p>
         
         <EndpointBlock 
           method="GET"
-          path="/api/v1/repos"
+          path="/v1/repos"
           description="List all repositories accessible by the authenticated user that have the DevPulse App installed."
           responseData={`{\n  "data": [\n    {\n      "id": "repo_1",\n      "name": "api-gateway",\n      "risk_score": 85,\n      "last_scan": "2026-05-26T12:00:00Z"\n    }\n  ],\n  "meta": { "total": 1 }\n}`}
         />
 
         <EndpointBlock 
           method="GET"
-          path="/api/v1/repos/:id"
+          path="/v1/repos/:id"
           description="Retrieve detailed information about a specific repository, including its active webhooks and security posture."
           responseData={`{\n  "id": "repo_1",\n  "name": "api-gateway",\n  "default_branch": "main",\n  "is_monitored": true\n}`}
         />
@@ -135,25 +136,25 @@ const API_SECTIONS = [
     title: 'Risk Analysis',
     content: (
       <div className="animate-in fade-in duration-500">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-6">Risk Analysis</h1>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-6">Risk Analysis</h1>
         <p className="text-slate-400 text-lg mb-12 max-w-2xl">
           Trigger manual scans and retrieve the results of static analysis and AI threat models.
         </p>
         
         <EndpointBlock 
           method="POST"
-          path="/api/v1/analysis/run"
-          description="Manually trigger a vulnerability scan for a specific repository and branch."
-          requestData={`{\n  "repo_id": "repo_1",\n  "branch": "main",\n  "commit_sha": "abc1234"\n}`}
-          responseData={`{\n  "scan_id": "scan_999",\n  "status": "queued",\n  "estimated_time": "45s"\n}`}
+          path="/v1/analyze"
+          description="Manually trigger a vulnerability scan for a specific repository."
+          requestData={`{\n  "repositoryFullName": "SSSahil15/DevPulse",\n  "repoUrl": "https://github.com/SSSahil15/DevPulse"\n}`}
+          responseData={`{\n  "message": "Analysis started in background.",\n  "jobId": "job_9a2f1c8e0b4d2a6f",\n  "room": "scan_SSSahil15/DevPulse"\n}`}
           status="202 Accepted"
         />
 
         <EndpointBlock 
           method="GET"
-          path="/api/v1/analysis/:id"
-          description="Poll for the results of a specific scan. For real-time updates, use the Telemetry WebSocket."
-          responseData={`{\n  "scan_id": "scan_999",\n  "status": "completed",\n  "findings": [\n    {\n      "id": "vuln_1",\n      "severity": "critical",\n      "cwe": "CWE-89",\n      "file": "src/db.js",\n      "line": 42\n    }\n  ]\n}`}
+          path="/v1/pipeline/jobs/:jobId"
+          description="Poll for the status of a specific scan job."
+          responseData={`{\n  "jobId": "job_9a2f1c8e0b4d2a6f",\n  "status": "completed",\n  "findings": [\n    {\n      "id": "vuln_1",\n      "severity": "critical",\n      "cwe": "CWE-89",\n      "file": "src/db.js",\n      "line": 42\n    }\n  ]\n}`}
         />
       </div>
     )
@@ -164,14 +165,14 @@ const API_SECTIONS = [
     title: 'Telemetry',
     content: (
       <div className="animate-in fade-in duration-500">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-6">Telemetry (WebSocket)</h1>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-6">Telemetry (WebSocket)</h1>
         <p className="text-slate-400 text-lg mb-12 max-w-2xl">
           Connect to our WebSocket endpoint for live streaming of scan events, agent actions, and infrastructure metrics.
         </p>
         
         <EndpointBlock 
           method="GET"
-          path="wss://api.devpulse.com/v1/telemetry/live"
+          path="wss://api.devpulse.dev/v1/telemetry/live"
           description="Establish a WebSocket connection. Requires token to be passed via query parameter for browser environments."
           requestData={`// Query Parameters\n?token=dp_live_xxx`}
           responseData={`// Server Push Example\n{\n  "event": "scan.progress",\n  "scan_id": "scan_999",\n  "progress_percent": 45,\n  "current_file": "src/auth.js"\n}`}
@@ -186,17 +187,17 @@ const API_SECTIONS = [
     title: 'AI Copilot',
     content: (
       <div className="animate-in fade-in duration-500">
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-6">AI Copilot</h1>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-6">AI Copilot</h1>
         <p className="text-slate-400 text-lg mb-12 max-w-2xl">
           Interact directly with the DevPulse AI remediation engine to generate automated fixes for vulnerabilities.
         </p>
         
         <EndpointBlock 
           method="POST"
-          path="/api/v1/copilot/fix"
-          description="Request the AI engine to generate a pull request fixing a specific vulnerability."
-          requestData={`{\n  "vuln_id": "vuln_1",\n  "strategy": "safe_patch",\n  "create_pr": true\n}`}
-          responseData={`{\n  "job_id": "job_404",\n  "pr_url": "https://github.com/org/repo/pull/42",\n  "diff": "--- a/src/db.js\\n+++ b/src/db.js\\n..."\n}`}
+          path="/v1/ai/chat"
+          description="Submit a natural language query to the AI Copilot regarding codebase health."
+          requestData={`{\n  "query": "How do I fix the SQL injection vulnerability?",\n  "context": {},\n  "history": []\n}`}
+          responseData={`{\n  "response": "To fix the SQL injection, use parameterized queries instead of string concatenation...",\n  "suggested_patch": "--- a/src/db.js\\n+++ b/src/db.js\\n..."\n}`}
         />
       </div>
     )
@@ -212,6 +213,13 @@ export default function ApiPage() {
   useEffect(() => {
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeSection]);
+
+  const [pageFeedback, setPageFeedback] = useState(null); // 'yes', 'no', or null
+
+  // Reset feedback state when active section changes
+  useEffect(() => {
+    setPageFeedback(null);
   }, [activeSection]);
 
   const filteredSections = API_SECTIONS.filter(section => 
@@ -329,13 +337,101 @@ export default function ApiPage() {
           <div className="max-w-6xl mx-auto">
             {currentContent}
             
-            {/* Footer */}
-            <div className="mt-12 pt-8 flex justify-between items-center text-sm">
-              <div className="text-slate-500">
-                DevPulse API v1.0.0
+            {/* Feedback Widget */}
+            <div className="flex flex-col items-center justify-center gap-4 pb-10 mt-20 text-slate-500 text-sm border-t border-white/5 pt-10">
+              <div className="flex items-center gap-4 h-6">
+                {pageFeedback === null ? (
+                  <>
+                    <span>Was this page helpful?</span>
+                    <button 
+                      onClick={() => setPageFeedback('yes')}
+                      className="hover:text-emerald-400 font-bold transition-colors px-2 py-0.5 rounded hover:bg-emerald-500/10"
+                    >
+                      Yes
+                    </button>
+                    <span className="text-white/10">|</span>
+                    <button 
+                      onClick={() => setPageFeedback('no')}
+                      className="hover:text-red-400 font-bold transition-colors px-2 py-0.5 rounded hover:bg-red-500/10"
+                    >
+                      No
+                    </button>
+                  </>
+                ) : pageFeedback === 'yes' ? (
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium animate-in fade-in zoom-in-95 duration-200">
+                    <Check className="w-4 h-4 shrink-0 animate-bounce" />
+                    <span>Thank you! We're glad you found this helpful.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-slate-400 font-medium animate-in fade-in zoom-in-95 duration-200">
+                    <span>Thank you! We'll work on making this page better.</span>
+                  </div>
+                )}
               </div>
-              <a href="#" className="text-blue-400 hover:underline">Download OpenAPI Spec</a>
             </div>
+
+            {/* Footer */}
+            <footer className="w-full bg-[#06080d] border-t border-white/5 pt-16 pb-8 mt-10 z-10">
+              <div className="px-6 md:px-12 grid grid-cols-1 md:grid-cols-4 gap-12 mb-12 max-w-6xl mx-auto">
+                <div className="col-span-1 md:col-span-1">
+                  <a href="/" className="flex items-center gap-2 cursor-pointer group mb-4 inline-flex">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-emerald-400 p-[1px]">
+                      <div className="w-full h-full bg-[#080b14] rounded-lg flex items-center justify-center group-hover:bg-transparent transition-colors">
+                        <img src="/Logo.png" alt="DevPulse Logo" className="w-5 h-5 object-contain" />
+                      </div>
+                    </div>
+                    <span className="text-xl font-bold tracking-tight text-white">DevPulse</span>
+                  </a>
+                  <p className="text-xs text-slate-500 leading-relaxed mb-6 pr-4">
+                    The AI-powered DevSecOps platform for modern engineering teams. Ship faster, securely.
+                  </p>
+                  <div className="flex gap-4">
+                    <a href="https://www.linkedin.com/in/-sahil/" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><LinkedinIcon className="w-5 h-5" /></a>
+                    <a href="https://github.com/SSSahil15/DevPulse" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Github className="w-5 h-5" /></a>
+                    <a href="https://discord.gg/95NY3xxx8X" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><DiscordIcon className="w-5 h-5" /></a>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-bold text-white mb-4">Product</h4>
+                  <ul className="space-y-3 text-sm text-slate-400">
+                    <li><a href="/features" className="hover:text-blue-400 transition-colors">Features</a></li>
+                    <li><a href="/security" className="hover:text-blue-400 transition-colors">Security</a></li>
+                    <li><a href="/changelog" className="hover:text-blue-400 transition-colors">Changelog</a></li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-white mb-4">Resources</h4>
+                  <ul className="space-y-3 text-sm text-slate-400">
+                    <li><a href="/docs" className="hover:text-blue-400 transition-colors">Documentation</a></li>
+                    <li><a href="/reference" className="hover:text-blue-400 transition-colors">API Reference</a></li>
+                    <li><a href="/blog" className="hover:text-blue-400 transition-colors">Blog</a></li>
+                    <li><a href="/community" className="hover:text-blue-400 transition-colors">Community</a></li>
+                    <li><a href="/contributing" className="hover:text-blue-400 transition-colors">Contributing</a></li>
+                    <li><a href="/openapi.yaml" download="openapi.yaml" className="hover:text-blue-400 transition-colors">Download OpenAPI Spec</a></li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-white mb-4">Company</h4>
+                  <ul className="space-y-3 text-sm text-slate-400">
+                    <li><a href="/about" className="hover:text-blue-400 transition-colors">About Us</a></li>
+                    <li><a href="/contact" className="hover:text-blue-400 transition-colors">Contact</a></li>
+                    <li><a href="/privacy" className="hover:text-blue-400 transition-colors">Privacy Policy</a></li>
+                    <li><a href="/terms" className="hover:text-blue-400 transition-colors">Terms of Service</a></li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="px-6 md:px-12 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-600 max-w-6xl mx-auto">
+                <div>&copy; {new Date().getFullYear()} DevPulse Inc. All rights reserved. • v1.0.0</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  All systems operational
+                </div>
+              </div>
+            </footer>
           </div>
         </main>
       </div>

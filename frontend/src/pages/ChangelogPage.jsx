@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import StaticPageLayout from '../components/StaticPageLayout';
+import SidebarPageLayout from '../components/SidebarPageLayout';
 import { Search, ExternalLink, Sparkles } from 'lucide-react';
 
 const RELEASES = [
   {
     version: 'v1.3.0',
     date: 'May 20, 2026',
-    githubLink: 'https://github.com/SSSahil15/repo-for-testing/releases/tag/v1.3.0',
+    githubLink: 'https://github.com/SSSahil15/DevPulse/releases/tag/v1.3.0',
     latest: true,
     updates: [
       { type: 'Added', text: 'AI remediation engine to automatically generate fix PRs.' },
@@ -17,7 +17,7 @@ const RELEASES = [
   {
     version: 'v1.2.0',
     date: 'May 6, 2026',
-    githubLink: 'https://github.com/SSSahil15/repo-for-testing/releases/tag/v1.2.0',
+    githubLink: 'https://github.com/SSSahil15/DevPulse/releases/tag/v1.2.0',
     updates: [
       { type: 'Added', text: 'Deployment analytics and failure rate tracking.' },
       { type: 'Added', text: 'CVE scanning integration in CI/CD pipelines.' },
@@ -27,7 +27,7 @@ const RELEASES = [
   {
     version: 'v1.1.0',
     date: 'April 22, 2026',
-    githubLink: 'https://github.com/SSSahil15/repo-for-testing/releases/tag/v1.1.0',
+    githubLink: 'https://github.com/SSSahil15/DevPulse/releases/tag/v1.1.0',
     updates: [
       { type: 'Added', text: 'Initial AI risk engine for vulnerability prediction.' },
       { type: 'Added', text: 'OAuth integration for GitHub authentication.' },
@@ -59,12 +59,12 @@ export default function ChangelogPage() {
   }).filter(release => release.updates.length > 0);
 
   return (
-    <StaticPageLayout>
+    <SidebarPageLayout title="Changelog" sidebarLinks={RELEASES.map(r => ({ id: r.version, title: r.version, icon: Sparkles }))}>
       <div className="mb-12">
         <div className="inline-flex items-center gap-2 bg-[#4F46E5]/10 border border-[#4F46E5]/20 text-[#4F46E5] text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-widest mb-6">
           <Sparkles className="w-3.5 h-3.5" /> Product Updates
         </div>
-        <h1 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight">Changelog</h1>
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-6">Changelog</h1>
         <p className="text-slate-400 text-lg md:text-xl max-w-2xl">
           See what's new in DevPulse. We ship improvements every week to make your DevSecOps seamless.
         </p>
@@ -108,7 +108,7 @@ export default function ChangelogPage() {
           </div>
         ) : (
           filteredReleases.map((release, index) => (
-            <div key={release.version} className="relative flex flex-col md:flex-row gap-6 md:gap-12 group animate-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}>
+            <section id={release.version} key={release.version} className="scroll-mt-24 relative flex flex-col md:flex-row gap-6 md:gap-12 group animate-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${index * 100}ms`, animationFillMode: 'both' }}>
               
               {/* Timeline dot */}
               <div className="absolute left-5 md:left-[8.5rem] w-3 h-3 bg-[#080b14] border-2 border-blue-500 rounded-full -translate-x-1.5 md:translate-x-[-1px] mt-1.5 md:mt-2 ring-4 ring-[#080b14]" />
@@ -122,7 +122,7 @@ export default function ChangelogPage() {
               <div className="flex-1 bg-[#0d1117] border border-white/5 group-hover:border-white/10 rounded-2xl p-6 md:p-8 transition-colors shadow-xl">
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-2xl font-bold text-white tracking-tight">{release.version}</h3>
+                    <h2 id={release.version} className="text-2xl font-bold text-white tracking-tight">{release.version}</h2>
                     {release.latest && (
                       <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
                         Latest
@@ -153,10 +153,10 @@ export default function ChangelogPage() {
                   ))}
                 </ul>
               </div>
-            </div>
+            </section>
           ))
         )}
       </div>
-    </StaticPageLayout>
+    </SidebarPageLayout>
   );
 }

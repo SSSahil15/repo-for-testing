@@ -17,6 +17,11 @@ const CommunityPage = lazy(() => import("./pages/CommunityPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
 const TermsOfServicePage = lazy(() => import("./pages/TermsOfServicePage"));
+const RoadmapPage = lazy(() => import("./pages/RoadmapPage"));
+const ContributingPage = lazy(() => import("./pages/ContributingPage"));
+const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const SecurityPage = lazy(() => import("./pages/SecurityPage"));
+const AboutUsPage = lazy(() => import("./pages/AboutUsPage"));
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -143,6 +148,11 @@ function App() {
           <Route path="/reference" element={<ApiPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/community" element={<CommunityPage />} />
+          <Route path="/roadmap" element={<RoadmapPage />} />
+          <Route path="/contributing" element={<ContributingPage />} />
+          <Route path="/features" element={<FeaturesPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          <Route path="/about" element={<AboutUsPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfServicePage />} />

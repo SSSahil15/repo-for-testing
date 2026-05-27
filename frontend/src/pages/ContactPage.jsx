@@ -15,7 +15,7 @@ import {
 import { GithubIcon, TwitterIcon, DiscordIcon } from '../components/icons';
 import StaticPageLayout from '../components/StaticPageLayout';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = import.meta.env.VITE_API_URL || '';
 
 const ContactPage = () => {
   const [formData, setFormData] = useState({
@@ -100,7 +100,7 @@ const ContactPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-5xl md:text-7xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 mb-6"
+            className="text-5xl md:text-6xl lg:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight mb-6"
           >
             Connect with the <br className="hidden md:block" /> DevPulse team.
           </motion.h1>
@@ -123,11 +123,11 @@ const ContactPage = () => {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 + idx * 0.1 }}
-              className="group relative p-6 rounded-3xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800/80 transition-all duration-300 backdrop-blur-xl overflow-hidden"
+              className="group relative p-6 rounded-3xl bg-[#0d1117] border border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
             >
               <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-br ${method.color} transition-opacity duration-500`} />
               <div className="relative z-10 flex flex-col items-start gap-4">
-                <div className={`p-3 rounded-2xl bg-slate-900/50 border border-slate-700/50 ${method.iconColor}`}>
+                <div className={`p-3 rounded-2xl bg-white/5 border border-white/5 ${method.iconColor}`}>
                   {method.icon}
                 </div>
                 <div>
@@ -147,7 +147,7 @@ const ContactPage = () => {
             transition={{ duration: 0.7, delay: 0.5 }}
             className="lg:col-span-7"
           >
-            <div className="p-8 rounded-[2rem] bg-slate-800/30 border border-slate-700/50 backdrop-blur-xl relative overflow-hidden">
+            <div className="p-8 rounded-[2rem] bg-[#0d1117] border border-white/10 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500" />
               
               <div className="mb-8">
@@ -269,8 +269,7 @@ const ContactPage = () => {
               </div>
             </div>
 
-            {/* Categories */}
-            <div className="p-6 rounded-3xl bg-slate-800/30 border border-slate-700/50 backdrop-blur-md">
+            <div className="p-6 rounded-3xl bg-[#0d1117] border border-white/10">
               <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                 <HelpCircle className="w-5 h-5 text-indigo-400" />
                 Support Categories
@@ -288,8 +287,7 @@ const ContactPage = () => {
               </div>
             </div>
 
-            {/* FAQ Preview */}
-            <div className="p-6 rounded-3xl bg-slate-800/30 border border-slate-700/50 backdrop-blur-md">
+            <div className="p-6 rounded-3xl bg-[#0d1117] border border-white/10">
               <h3 className="text-lg font-semibold text-white mb-4">Frequently Asked</h3>
               <div className="space-y-5">
                 {faqs.map((faq, idx) => (
