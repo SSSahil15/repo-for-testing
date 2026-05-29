@@ -41,5 +41,11 @@
   },
   "engines": {
     "node": ">=20.0"
+  },
+  "overrides": {
+    "uuid": "^14.0.0"
+  },
+  "resolutions": {
+    "uuid": "^14.0.0"
   }
 }
