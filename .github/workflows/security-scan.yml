@@ -514,7 +514,7 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     steps:
       - name: '💬 Post or update security summary comment'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const bc  = parseInt('${{ needs.npm-audit.outputs.backend_critical }}'  || '0');

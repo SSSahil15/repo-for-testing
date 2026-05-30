@@ -200,7 +200,7 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     steps:
       - name: '💬 Post or update performance comment'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const bundleKb   = '${{ needs.bundle-size.outputs.total_gzip_kb }}' || 'N/A';
